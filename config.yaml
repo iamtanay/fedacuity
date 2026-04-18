@@ -1,0 +1,161 @@
+# FedAcuity — Central Configuration
+# All hyperparameters, paths, and experiment settings are controlled here.
+# Import via: from config import load_config; cfg = load_config()
+
+project:
+  name: "FedAcuity"
+  author: "Tanay Kashyap"
+  seed: 42
+
+paths:
+  data:
+    raw:        "data/raw"
+    synthetic:  "data/synthetic"
+    mimic_iv:   "data/mimic_iv"
+    processed:  "data/processed"
+  results:
+    figures:    "results/figures"
+    tables:     "results/tables"
+    logs:       "results/logs"
+
+# ── M1: Synthetic Data Generation ────────────────────────────────────────────
+data:
+  n_facilities: 10
+  care_type_split:            # MC: Memory Care, SNF: Skilled Nursing, IL: Independent Living
+    MC: 3
+    SNF: 4
+    IL: 3
+  years_per_facility: 3       # → ~1095 daily rows per facility
+  mismatch_target_rate: 0.30  # ~25-35% mismatch rate (AHCA survey-informed)
+
+  ctgan:
+    epochs: 500
+    batch_size: 500
+    generator_dim: [256, 256]
+    discriminator_dim: [256, 256]
+
+  schema:
+    features:
+      - adl_eating            # 0-6 scale
+      - adl_mobility          # 0-6 scale
+      - adl_toileting         # 0-6 scale
+      - adl_cognition         # 0-6 scale
+      - nursing_hours_rn      # RN hours available per 24h
+      - nursing_hours_lpn     # LPN hours available per 24h
+      - nursing_hours_cna     # CNA hours available per 24h
+      - medication_count      # average medications per resident
+      - fall_risk_score       # 0-10 scale
+      - pain_assessment_score # 0-10 scale
+      - resident_census       # daily resident count
+      - incident_count        # daily incident log count
+      - care_type             # MC / SNF / IL
+      - rug_category          # Resource Utilization Group (RUG-IV)
+      - mds_adl_summary       # MDS 3.0 ADL summary score
+    label: "staffing_mismatch" # binary: 1 = mismatch, 0 = adequate
+
+  splits:
+    train: 0.60
+    val:   0.20
+    test:  0.20
+  held_out_facilities: [8, 9]  # 1 SNF + 1 MC reserved for final evaluation
+
+  fidelity:
+    ks_alpha: 0.05              # KS-test significance threshold
+    tstr_gap_threshold: 0.08    # <8% accuracy gap target
+    frobenius_baseline: "random" # Compare vs shuffled data baseline
+
+# ── M2: Federated Learning ────────────────────────────────────────────────────
+fl:
+  rounds: 50
+  fraction_fit: 1.0            # All clients participate each round
+  min_available_clients: 8
+
+  fedavg:
+    local_epochs: 5
+
+  fedprox:
+    local_epochs: 5
+    mu_values: [0.01, 0.1, 1.0]
+    mu_selected: 0.1            # Updated after μ sweep in Week 7
+
+  clustered:
+    local_epochs: 5
+    clusters:
+      MC:  [0, 1, 2]            # facility indices (0-indexed)
+      SNF: [3, 4, 5, 6]
+      IL:  [7, 8, 9]
+
+  xgboost:
+    n_estimators: 100
+    max_depth: 6
+    learning_rate: 0.1
+    eval_metric: "auc"
+
+  pytorch_nn:
+    hidden_dims: [128, 64, 32]
+    dropout: 0.2
+    learning_rate: 0.001
+    local_epochs: 5
+    batch_size: 64
+
+# ── M3: Differential Privacy ──────────────────────────────────────────────────
+dp:
+  delta: 1.0e-5
+  max_grad_norm: 1.0
+  epsilon_values: [1, 2, 5, 10, null]  # null = no DP (ε=∞)
+  recommended_epsilon: 2               # hypothesis: ε≥2 preserves utility
+
+# ── M4: XAI Audit ─────────────────────────────────────────────────────────────
+xai:
+  shap:
+    background_samples: 100    # for TreeExplainer background
+    test_samples: 500          # compute SHAP on this many test instances
+    top_k_features: 10         # for D1 Fidelity rank correlation
+
+  d1_fidelity:
+    method: "spearman"         # rank correlation vs centralised oracle
+    target_rho: 0.75           # CFL target
+
+  d2_stability:
+    n_perturbations: 100
+    noise_level: 0.05          # ±5% Gaussian noise on continuous features
+    continuous_features:
+      - adl_eating
+      - adl_mobility
+      - adl_toileting
+      - adl_cognition
+      - nursing_hours_rn
+      - nursing_hours_lpn
+      - nursing_hours_cna
+      - medication_count
+      - fall_risk_score
+      - pain_assessment_score
+      - resident_census
+
+  d3_fairness:
+    subgroups: ["MC", "SNF", "IL"]
+    metrics: ["equalized_odds", "demographic_parity"]
+
+  d4_plausibility:
+    top_k: 5
+    literature_features:       # Clinical predictors documented in LTC literature
+      - adl_mobility
+      - adl_cognition
+      - medication_count
+      - fall_risk_score
+      - pain_assessment_score
+      - mds_adl_summary
+      - rug_category
+    target_match_rate: 0.60    # ≥60% of top-5 SHAP features in literature
+
+# ── M5: Evaluation & Reporting ────────────────────────────────────────────────
+evaluation:
+  primary_metric: "roc_auc"
+  metrics: ["roc_auc", "f1", "precision", "recall"]
+  stat_tests:
+    fl_comparison: "mann_whitney_u"
+    bootstrap_ci: 0.95
+  figures:
+    dpi: 300
+    format: ["png", "pdf"]
+    style: "seaborn-v0_8-paper"

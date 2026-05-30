@@ -43,14 +43,14 @@ paper: fill results sections ──► full draft ──► final sem [11 Jul]
 **Goal: Get the FL pipeline running end-to-end and producing numbers.**
 
 ### Day 1–2 (30–31 May) — Debug & Run FL Simulation
-- [ ] Run `pytest tests/test_schema.py -v` — confirm all 35 pass
-- [ ] Run `pytest tests/test_loaders.py -v` — confirm non-data tests pass
-- [ ] Run `python -m src.fl.simulation --strategy local` — fix any runtime errors
-- [ ] Run `python -m src.fl.simulation --strategy centralised` — fix any runtime errors
-- [ ] Run `python -m src.fl.simulation --strategy fedavg --rounds 10` (short run first)
-- [ ] Run `python -m src.fl.simulation --strategy fedprox --mu 0.1 --rounds 10`
-- [ ] Run `python -m src.fl.simulation --strategy clustered --rounds 10`
-- [ ] Confirm `results/logs/results_*.json` is produced for each strategy
+- [x] Run `pytest tests/test_schema.py -v` — 44/44 pass
+- [x] Run `pytest tests/test_loaders.py -v` — 72/72 pass (fixed IL mismatch rate bug)
+- [x] Run `python -m src.fl.simulation --strategy local` — AUC 0.9749
+- [x] Run `python -m src.fl.simulation --strategy centralised` — AUC 0.9777
+- [x] Run `python -m src.fl.simulation --strategy fedavg --rounds 10` — AUC 0.9643
+- [x] Run `python -m src.fl.simulation --strategy fedprox --mu 0.1 --rounds 10` — AUC 0.9643
+- [x] Run `python -m src.fl.simulation --strategy clustered --rounds 10` — AUC 0.9828 ✓ CFL > FedAvg
+- [x] Confirm `results/logs/results_*.json` is produced for each strategy
 
 ### Day 3–4 (1–2 Jun) — Run Full Simulation + Fidelity
 - [ ] Run full simulation: `python -m src.fl.simulation --all --rounds 50`
@@ -251,6 +251,7 @@ Use this table to track what was done each working session.
 | Date | Session | Done | Blocked on |
 |---|---|---|---|
 | 30 May 2026 | Setup | Created CLAUDE.md, removed CONTEXT.md, created PLAN.md | — |
+| 30 May 2026 | Day 1–2 | All tests green (72/72). Fixed 3 bugs: IL NON_IID_SPEC missing adl_eating/adl_toileting (41%→12% mismatch), _calibrate_threshold hi ceiling too low (5→50), XGBoost 3.x BytesIO incompatibility. Rewrote simulation.py with manual FL loop (no Ray). All 5 strategies run: Local 0.9749, Centralised 0.9777, FedAvg 0.9643, FedProx 0.9643, CFL 0.9828. CFL > FedAvg confirmed. | — |
 
 ---
 

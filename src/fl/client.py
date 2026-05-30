@@ -3,12 +3,12 @@ FedAcuity — M2.1/M2.2 Flower Client
 Implements the per-facility Flower client with XGBoost local training.
 """
 
-import io
 import logging
+import os
+import tempfile
 from typing import Dict, List, Tuple
 
 import numpy as np
-import flwr as fl
 import xgboost as xgb
 from sklearn.metrics import roc_auc_score, f1_score
 
@@ -21,14 +21,16 @@ XGB_CFG = cfg["fl"]["xgboost"]
 
 
 def serialize_xgb_model(model: xgb.XGBClassifier) -> bytes:
-    """Serialise XGBoost model to bytes for Flower weight exchange."""
-    buf = io.BytesIO()
-    model.get_booster().save_model(buf)
-    return buf.getvalue()
+    """Serialise XGBoost model to bytes for FL weight exchange.
+    Uses save_raw() which returns bytes directly — compatible with XGBoost 3.x.
+    """
+    return model.get_booster().save_raw("ubj")
 
 
-def deserialize_xgb_model(weights: bytes, n_classes: int = 2) -> xgb.XGBClassifier:
-    """Deserialise bytes back into XGBoost model."""
+def deserialize_xgb_model(weights: bytes) -> xgb.XGBClassifier:
+    """Deserialise bytes back into XGBoost model via a temp file (XGBoost 3.x safe).
+    Uses XGBClassifier.load_model() so sklearn attributes (n_classes_ etc.) are set.
+    """
     model = xgb.XGBClassifier(
         n_estimators=XGB_CFG["n_estimators"],
         max_depth=XGB_CFG["max_depth"],
@@ -36,17 +38,20 @@ def deserialize_xgb_model(weights: bytes, n_classes: int = 2) -> xgb.XGBClassifi
         eval_metric=XGB_CFG["eval_metric"],
         verbosity=0,
     )
-    buf = io.BytesIO(weights)
-    booster = xgb.Booster()
-    booster.load_model(buf)
-    model._Booster = booster
+    with tempfile.NamedTemporaryFile(suffix=".ubj", delete=False) as f:
+        f.write(weights)
+        tmp_path = f.name
+    try:
+        model.load_model(tmp_path)
+    finally:
+        os.unlink(tmp_path)
     return model
 
 
-class FedAcuityClient(fl.client.NumPyClient):
+class FedAcuityClient:
     """
-    Flower client for one LTC facility.
-    Uses XGBoost as the local model.
+    FL client for one LTC facility.
+    Uses XGBoost as the local model. Compatible with the manual simulation loop.
     """
 
     def __init__(self, facility_id: int, mu: float = None):

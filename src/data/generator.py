@@ -87,7 +87,7 @@ def build_seed_dataset(care_type: str, n_rows: int = 500) -> pd.DataFrame:
 
 def _calibrate_threshold(demand, census, supply, target_rate, n_steps=100):
     """Binary-search threshold to hit the target mismatch rate."""
-    lo, hi = 0.01, 5.0
+    lo, hi = 0.01, 50.0
     for _ in range(n_steps):
         mid = (lo + hi) / 2
         rate = compute_mismatch_label(demand, census, supply, mid).mean()
@@ -215,6 +215,7 @@ def run_generation():
 
     # Step 3: Save combined parquet
     combined = pd.concat(all_dfs, ignore_index=True)
+    combined["date"] = pd.to_datetime(combined["date"])
     parquet_path = SYNTHETIC_DIR / "all_facilities.parquet"
     combined.to_parquet(parquet_path, index=False)
     logger.info(f"Combined dataset: {len(combined)} rows → {parquet_path}")

@@ -60,6 +60,7 @@ NON_IID_SPEC: Dict[str, Dict] = {
         "adl_cognition":         {"mean": 4.5, "std": 1.0, "clip": (0, 6)},
         "adl_mobility":          {"mean": 4.0, "std": 1.2, "clip": (0, 6)},
         "adl_eating":            {"mean": 3.5, "std": 1.3, "clip": (0, 6)},
+        "adl_toileting":         {"mean": 3.5, "std": 1.2, "clip": (0, 6)},
         "medication_count":      {"mean": 11,  "std": 2.5, "clip": (5, 20)},
         "nursing_hours_rn":      {"mean": 2.5, "std": 0.5, "clip": (0.5, 8)},
         "nursing_hours_cna":     {"mean": 4.0, "std": 0.8, "clip": (1, 10)},
@@ -70,6 +71,8 @@ NON_IID_SPEC: Dict[str, Dict] = {
         # Skilled Nursing: post-acute rehab, high acuity variance, frequent discharge
         "adl_cognition":         {"mean": 2.5, "std": 1.5, "clip": (0, 6)},
         "adl_mobility":          {"mean": 3.0, "std": 1.5, "clip": (0, 6)},
+        "adl_eating":            {"mean": 2.5, "std": 1.2, "clip": (0, 6)},
+        "adl_toileting":         {"mean": 2.5, "std": 1.2, "clip": (0, 6)},
         "medication_count":      {"mean": 9,   "std": 3.0, "clip": (3, 20)},
         "nursing_hours_rn":      {"mean": 3.0, "std": 0.7, "clip": (1, 10)},
         "nursing_hours_cna":     {"mean": 3.5, "std": 0.9, "clip": (1, 10)},
@@ -80,6 +83,8 @@ NON_IID_SPEC: Dict[str, Dict] = {
         # Independent Living: low acuity, wellness focus, stable patterns
         "adl_cognition":         {"mean": 1.0, "std": 0.8, "clip": (0, 6)},
         "adl_mobility":          {"mean": 1.2, "std": 0.9, "clip": (0, 6)},
+        "adl_eating":            {"mean": 1.0, "std": 0.8, "clip": (0, 4)},
+        "adl_toileting":         {"mean": 1.0, "std": 0.8, "clip": (0, 4)},
         "medication_count":      {"mean": 5,   "std": 2.0, "clip": (0, 12)},
         "nursing_hours_rn":      {"mean": 1.0, "std": 0.3, "clip": (0.2, 4)},
         "nursing_hours_cna":     {"mean": 1.5, "std": 0.5, "clip": (0.3, 5)},
@@ -108,7 +113,7 @@ CLUSTER_ASSIGNMENTS = {
 # ── Label Definition ──────────────────────────────────────────────────────────
 
 def compute_mismatch_label(
-    adl_demand_score: np.ndarray,
+    demand: np.ndarray,
     resident_census: np.ndarray,
     nursing_hours_available: np.ndarray,
     threshold: float = 0.85,
@@ -120,15 +125,15 @@ def compute_mismatch_label(
         (ADL demand score × census) / total nursing hours > threshold
 
     Args:
-        adl_demand_score:      weighted ADL dependency per resident (0–1 normalised)
-        resident_census:       daily resident count
+        demand:                  weighted ADL dependency per resident (0–1 normalised)
+        resident_census:         daily resident count
         nursing_hours_available: total nursing hours (RN + LPN + CNA)
-        threshold:             demand/supply ratio above which mismatch is flagged
+        threshold:               demand/supply ratio above which mismatch is flagged
 
     Returns:
         Binary array: 1 = mismatch, 0 = adequate
     """
-    demand = adl_demand_score * resident_census
+    demand = demand * resident_census
     supply = np.maximum(nursing_hours_available, 0.1)  # avoid div-by-zero
     ratio = demand / supply
     return (ratio > threshold).astype(int)

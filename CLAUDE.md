@@ -1,7 +1,7 @@
 # CLAUDE.md — FedAcuity
 
 This file is the authoritative context file for AI assistants working on this codebase.
-Read it before doing anything.
+Read it before doing anything. Then read **PLAN.md** for the active week-by-week execution plan and task checklist.
 
 ---
 

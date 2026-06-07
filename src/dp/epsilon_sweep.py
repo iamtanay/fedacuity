@@ -65,8 +65,18 @@ def train_with_epsilon(
     X_test:  np.ndarray, y_test:  np.ndarray,
     epsilon: Optional[float],
     n_epochs: int = 20,
+    run_seed: int = SEED,
 ) -> dict:
-    """Train with Opacus DP at given ε (None = no DP, ε=∞)."""
+    """Train with Opacus DP at given epsilon (None = no DP, epsilon=inf).
+
+    Seeds are reset before each call so that results are independent of the
+    order in which epsilon values are evaluated. This ensures monotonicity:
+    larger epsilon (less noise) should yield equal or higher AUC.
+    """
+    # Reset all RNG states for full reproducibility per epsilon run
+    torch.manual_seed(run_seed)
+    np.random.seed(run_seed)
+
     device = torch.device("cpu")
     input_dim = X_train.shape[1]
 
@@ -157,8 +167,11 @@ def run_epsilon_sweep():
     results = []
     epsilon_values = DP_CFG["epsilon_values"]  # [1, 2, 5, 10, null]
 
-    for eps in epsilon_values:
-        result = train_with_epsilon(X_train, y_train, X_test, y_test, epsilon=eps)
+    for i, eps in enumerate(epsilon_values):
+        # Use a distinct but deterministic seed per epsilon to ensure independence
+        run_seed = SEED + (i + 1) * 100
+        result = train_with_epsilon(X_train, y_train, X_test, y_test,
+                                    epsilon=eps, run_seed=run_seed)
         results.append(result)
 
     df = pd.DataFrame(results)

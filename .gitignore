@@ -39,3 +39,9 @@ Thumbs.db
 
 # Secrets
 .env
+
+# AI assistant memory (Claude Code)
+.claude/
+
+# Figure preview thumbnails (regenerable)
+results/figures/previews/

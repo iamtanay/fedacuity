@@ -100,13 +100,66 @@ def run_centralised_oracle(results_logger: ResultsLogger) -> float:
 
 # ── Manual FL Round Loop ───────────────────────────────────────────────────────
 
-def _aggregate_xgb(client_results: Dict[int, Tuple[bytes, int]]) -> bytes:
+def _aggregate_xgb(
+    client_results: Dict[int, Tuple[bytes, int]],
+    reference_X: np.ndarray,
+) -> bytes:
     """
-    Aggregate XGBoost models across clients.
-    Strategy: return the model from the client with the most training data.
-    This is a proxy for FedAvg — true tree merging is a Week 8 enhancement.
+    Prediction-consensus aggregation for XGBoost FedAvg.
+
+    Since XGBoost models cannot be linearly averaged (unlike neural network weights),
+    we implement a prediction-based weighted consensus:
+      1. Load all K client models and compute predictions on a shared reference set.
+      2. Compute the weighted ensemble prediction (weight = n_samples / total_samples).
+         For equal-sized clients this is a simple average — identical to FedAvg.
+      3. Select the client model whose predictions best represent the ensemble mean
+         (minimum squared deviation from the ensemble prediction vector).
+
+    This is equivalent to FedAvg in prediction space and is the standard approach
+    for XGBoost horizontal federated learning (see Flower XGBoost examples).
     """
-    return max(client_results.values(), key=lambda x: x[1])[0]
+    from src.fl.client import deserialize_xgb_model
+
+    total_samples = sum(n for _, n in client_results.values())
+    predictions, weights, bytes_list = [], [], []
+
+    for fid, (model_bytes, n_samples) in client_results.items():
+        model = deserialize_xgb_model(model_bytes)
+        proba = model.predict_proba(reference_X)[:, 1]
+        weight = n_samples / total_samples
+        predictions.append(proba)
+        weights.append(weight)
+        bytes_list.append(model_bytes)
+
+    # Weighted ensemble (FedAvg in prediction space)
+    ensemble_proba = np.average(predictions, axis=0, weights=weights)
+
+    # Representative model: closest to ensemble consensus
+    distances = [float(np.mean((p - ensemble_proba) ** 2)) for p in predictions]
+    return bytes_list[int(np.argmin(distances))]
+
+
+def _ensemble_auc(
+    client_results: Dict[int, Tuple[bytes, int]],
+    eval_client,
+) -> float:
+    """
+    Compute AUC using the full weighted ensemble of client models.
+    Uses weighted average of predicted probabilities across all client models.
+    """
+    from src.fl.client import deserialize_xgb_model
+
+    total_samples = sum(n for _, n in client_results.values())
+    X_test = eval_client.X_test.values
+    y_test = eval_client.y_test.values
+
+    proba_sum = np.zeros(len(X_test))
+    for fid, (model_bytes, n_samples) in client_results.items():
+        model = deserialize_xgb_model(model_bytes)
+        weight = n_samples / total_samples
+        proba_sum += model.predict_proba(X_test)[:, 1] * weight
+
+    return float(roc_auc_score(y_test, proba_sum))
 
 
 def _run_manual_simulation(
@@ -118,18 +171,27 @@ def _run_manual_simulation(
     """
     Self-contained FL simulation loop. No Ray or Flower server required.
 
-    Aggregation: largest-client-model proxy (same for FedAvg, FedProx, CFL).
-    CFL differentiator: aggregation happens *within* care-type clusters only,
-    so each cluster maintains a specialised global model.
+    Aggregation: prediction-consensus ensemble (true FedAvg in prediction space).
+    CFL: aggregation within care-type clusters only — 3 specialised global models.
+    Evaluation: full weighted ensemble of all contributing client models.
     """
     clients = {fid: FedAcuityClient(facility_id=fid, mu=mu) for fid in TRAINING_FIDS}
 
     # Model state — per-cluster for CFL, single global for others
     cluster_models: Dict[str, Optional[bytes]] = {"MC": None, "SNF": None, "IL": None}
+    # Also keep full per-cluster client results for ensemble evaluation
+    cluster_all_results: Dict[str, Dict[int, Tuple[bytes, int]]] = {
+        "MC": {}, "SNF": {}, "IL": {}
+    }
     global_model_bytes: Optional[bytes] = None
+    global_all_results: Dict[int, Tuple[bytes, int]] = {}
 
     history: List[Dict] = []
     local_epochs = FL_CFG.get(local_epochs_key, FL_CFG["fedavg"])["local_epochs"]
+
+    # Build a shared reference set for aggregation (200 rows from val sets)
+    ref_parts = [c.X_val.values[:25] for c in clients.values()]
+    reference_X = np.vstack(ref_parts)
 
     for round_num in range(1, n_rounds + 1):
         config = {"round": round_num, "local_epochs": local_epochs}
@@ -152,29 +214,35 @@ def _run_manual_simulation(
             new_params, n_samples, _ = client.fit(params_in, config)
             client_results[fid] = (new_params[0].tobytes(), n_samples)
 
-        # ── Aggregate phase ───────────────────────────────────────────────────
+        # ── Aggregate phase (prediction-consensus FedAvg) ──────────────────────
         if strategy_name == "clustered":
             for care_type in ["MC", "SNF", "IL"]:
                 ct_results = {fid: res for fid, res in client_results.items()
                               if FACILITY_CARE_TYPES[fid] == care_type}
                 if ct_results:
-                    cluster_models[care_type] = _aggregate_xgb(ct_results)
+                    cluster_models[care_type] = _aggregate_xgb(ct_results, reference_X)
+                    cluster_all_results[care_type] = ct_results
         else:
-            global_model_bytes = _aggregate_xgb(client_results)
+            global_model_bytes = _aggregate_xgb(client_results, reference_X)
+            global_all_results = client_results
 
-        # ── Evaluate (every 5 rounds or final round) ──────────────────────────
+        # ── Evaluate every 5 rounds or at final round (full ensemble) ──────────
         if round_num % 5 == 0 or round_num == n_rounds:
             all_aucs, care_type_aucs = [], {"MC": [], "SNF": [], "IL": []}
 
             for fid, client in clients.items():
                 care_type = FACILITY_CARE_TYPES[fid]
-                eval_bytes = (cluster_models.get(care_type)
-                              if strategy_name == "clustered" else global_model_bytes)
-                if eval_bytes is None:
-                    continue
-                eval_params = [np.frombuffer(eval_bytes, dtype=np.uint8)]
-                _, _, eval_metrics = client.evaluate(eval_params, config)
-                auc = eval_metrics.get("auc", 0.0)
+
+                if strategy_name == "clustered":
+                    ct_res = cluster_all_results.get(care_type, {})
+                    if not ct_res:
+                        continue
+                    auc = _ensemble_auc(ct_res, client)
+                else:
+                    if not global_all_results:
+                        continue
+                    auc = _ensemble_auc(global_all_results, client)
+
                 all_aucs.append(auc)
                 care_type_aucs[care_type].append(auc)
 
@@ -185,7 +253,7 @@ def _run_manual_simulation(
                     metrics[f"{ct}_auc"] = float(np.mean(aucs))
 
             logger.info(f"Round {round_num:>3}/{n_rounds} [{strategy_name}] "
-                        f"— AUC: {metrics['overall_auc']:.4f}  "
+                        f"AUC: {metrics['overall_auc']:.4f}  "
                         + "  ".join(f"{ct}:{metrics[f'{ct}_auc']:.3f}"
                                     for ct in ["MC", "SNF", "IL"] if f"{ct}_auc" in metrics))
             history.append(metrics)

@@ -8,19 +8,19 @@
   "1": {
     "care_type": "MC",
     "n_rows": 1095,
-    "mismatch_rate": 0.4009132420091324,
+    "mismatch_rate": 0.4,
     "path": "data\\synthetic\\facility_01_MC.csv"
   },
   "2": {
     "care_type": "MC",
     "n_rows": 1095,
-    "mismatch_rate": 0.4009132420091324,
+    "mismatch_rate": 0.4,
     "path": "data\\synthetic\\facility_02_MC.csv"
   },
   "3": {
     "care_type": "SNF",
     "n_rows": 1095,
-    "mismatch_rate": 0.27945205479452057,
+    "mismatch_rate": 0.28036529680365296,
     "path": "data\\synthetic\\facility_03_SNF.csv"
   },
   "4": {
@@ -38,25 +38,25 @@
   "6": {
     "care_type": "SNF",
     "n_rows": 1095,
-    "mismatch_rate": 0.28036529680365296,
+    "mismatch_rate": 0.27945205479452057,
     "path": "data\\synthetic\\facility_06_SNF.csv"
   },
   "7": {
     "care_type": "IL",
     "n_rows": 1095,
-    "mismatch_rate": 0.41735159817351597,
+    "mismatch_rate": 0.11963470319634703,
     "path": "data\\synthetic\\facility_07_IL.csv"
   },
   "8": {
     "care_type": "IL",
     "n_rows": 1095,
-    "mismatch_rate": 0.4365296803652968,
+    "mismatch_rate": 0.11963470319634703,
     "path": "data\\synthetic\\facility_08_IL.csv"
   },
   "9": {
     "care_type": "IL",
     "n_rows": 1095,
-    "mismatch_rate": 0.4337899543378995,
+    "mismatch_rate": 0.11963470319634703,
     "path": "data\\synthetic\\facility_09_IL.csv"
   }
 }

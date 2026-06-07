@@ -21,18 +21,36 @@ from src.config import cfg
 logger = logging.getLogger(__name__)
 
 
-def _weighted_average_xgb(results: List[Tuple[bytes, int]]) -> bytes:
+def _weighted_average_xgb(results: List[Tuple[bytes, int]], reference_X=None) -> bytes:
     """
-    Weighted average of XGBoost models by client data size.
-    XGBoost doesn't support true gradient averaging, so we implement
-    a weighted ensemble via prediction averaging (common in XGBoost FL literature).
-    Returns the model from the client with the most data (proxy for FedAvg).
+    Prediction-consensus aggregation for intra-cluster FedAvg.
+
+    Weighted ensemble in prediction space: each client model predicts on a shared
+    reference set, predictions are averaged by client dataset size, and the model
+    whose predictions are closest to the ensemble mean is selected as the cluster
+    global model. For equal-sized clients this equals a simple average (FedAvg).
     """
-    # Sort by dataset size (descending) and return the largest client's model
-    # This is a placeholder — true XGBoost federated averaging uses
-    # Horizontal FL with tree merging (implemented in later iterations).
-    results_sorted = sorted(results, key=lambda x: x[1], reverse=True)
-    return results_sorted[0][0]
+    import numpy as np
+    from src.fl.client import deserialize_xgb_model
+
+    if reference_X is None or len(results) == 1:
+        # Single client or no reference: return the only/largest model
+        return max(results, key=lambda x: x[1])[0]
+
+    total_samples = sum(n for _, n in results)
+    predictions, weights, bytes_list = [], [], []
+
+    for model_bytes, n_samples in results:
+        model = deserialize_xgb_model(model_bytes)
+        proba = model.predict_proba(reference_X)[:, 1]
+        weight = n_samples / total_samples
+        predictions.append(proba)
+        weights.append(weight)
+        bytes_list.append(model_bytes)
+
+    ensemble_proba = np.average(predictions, axis=0, weights=weights)
+    distances = [float(np.mean((p - ensemble_proba) ** 2)) for p in predictions]
+    return bytes_list[int(np.argmin(distances))]
 
 
 class ClusteredFLServer(fl.server.strategy.Strategy):

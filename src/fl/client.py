@@ -83,48 +83,57 @@ class FedAcuityClient:
 
     def set_parameters(self, parameters: List[np.ndarray]):
         """Load global model weights from server."""
-        if parameters[0].sum() == 0:
-            return  # Skip uninitialised weights (first round)
+        # Sentinel: [np.zeros(1)] (8 bytes) signals uninitialised weights (round 1).
+        # A real serialized XGBoost model is always several kilobytes.
+        # We check length == 1 (sentinel array has shape (1,)) as the safe guard.
+        if len(parameters[0]) <= 1:
+            return  # Uninitialised — skip (first round)
         weights_bytes = parameters[0].tobytes()
         self.model = deserialize_xgb_model(weights_bytes)
 
     def fit(self, parameters: List[np.ndarray], config: Dict) -> Tuple[List[np.ndarray], int, Dict]:
-        """Local training step."""
+        """
+        Local training step.
+
+        Each round trains a fresh XGBoost with the configured fixed tree budget
+        (n_estimators from config). This ensures a fair comparison with the Local
+        baseline (which also uses n_estimators trees) and prevents unbounded model
+        growth across rounds.
+
+        The received global model (set_parameters) is stored as self.model and used
+        by the server for ensemble aggregation. The local model trained here is the
+        client's contribution to the next round's ensemble.
+
+        FedProx note: The proximal regularisation term (mu) is not implementable as a
+        gradient penalty in XGBoost tree boosting. It is correctly implemented in the
+        PyTorch StaffingNN variant (src/dp/epsilon_sweep.py). In this XGBoost path,
+        mu is stored for logging but has no effect on training — FedProx results are
+        therefore identical to FedAvg for XGBoost. This is a documented limitation,
+        disclosed in the paper's experimental setup section.
+        """
         self.set_parameters(parameters)
 
-        local_epochs = config.get("local_epochs", cfg["fl"]["fedavg"]["local_epochs"])
-
-        if self.model is None:
-            # First round: train from scratch
-            self.model = xgb.XGBClassifier(
-                n_estimators=XGB_CFG["n_estimators"],
-                max_depth=XGB_CFG["max_depth"],
-                learning_rate=XGB_CFG["learning_rate"],
-                eval_metric=XGB_CFG["eval_metric"],
-                random_state=SEED + self.facility_id,
-                verbosity=0,
-            )
-            self.model.fit(
-                self.X_train, self.y_train,
-                eval_set=[(self.X_val, self.y_val)],
-                verbose=False,
-            )
-        else:
-            # Subsequent rounds: continue training (warm start)
-            self.model.set_params(n_estimators=self.model.n_estimators + local_epochs * 10)
-            self.model.fit(
-                self.X_train, self.y_train,
-                xgb_model=self.model.get_booster(),
-                eval_set=[(self.X_val, self.y_val)],
-                verbose=False,
-            )
-
-        # FedProx proximal regularisation (applied as post-hoc gradient penalty proxy)
-        # For XGBoost, full DP-SGD proximal term is applied in PyTorch models (M3).
-        # Here we note μ for reporting.
+        # Always train with the configured fixed budget — no warm-start tree growth.
+        # This keeps model complexity constant across all rounds (100 trees always),
+        # ensuring a fair comparison with the Local baseline.
+        self.model = xgb.XGBClassifier(
+            n_estimators=XGB_CFG["n_estimators"],
+            max_depth=XGB_CFG["max_depth"],
+            learning_rate=XGB_CFG["learning_rate"],
+            eval_metric=XGB_CFG["eval_metric"],
+            random_state=SEED + self.facility_id,
+            verbosity=0,
+        )
+        self.model.fit(
+            self.X_train, self.y_train,
+            eval_set=[(self.X_val, self.y_val)],
+            verbose=False,
+        )
 
         train_auc = roc_auc_score(self.y_train, self.model.predict_proba(self.X_train)[:, 1])
         metrics = {"train_auc": float(train_auc), "facility_id": self.facility_id}
+        if self.mu is not None:
+            metrics["mu"] = self.mu  # Logged only; no effect on XGBoost training
 
         return self.get_parameters(config={}), self.n_train, metrics
 

@@ -64,6 +64,10 @@ def build_seed_dataset(care_type: str, n_rows: int = 500) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     df["care_type"] = care_type
 
+    # Compute mds_adl_summary as the correct deterministic function of ADL subscores.
+    adl_sum = df["adl_eating"] + df["adl_mobility"] + df["adl_toileting"] + df["adl_cognition"]
+    df["mds_adl_summary"] = np.clip(adl_sum * (28.0 / 24.0), 0, 28).round(1)
+
     # Compute label
     demand = adl_demand_score(
         df["adl_eating"].values,
@@ -154,6 +158,15 @@ def generate_facility(
         noise = rng.normal(0, 0.05 * (feat_spec.max_val - feat_spec.min_val), len(df))
         df[feat_name] = np.clip(df[feat_name] + noise, feat_spec.min_val, feat_spec.max_val)
 
+    # Enforce mds_adl_summary as a deterministic function of ADL subscores.
+    # In MDS 3.0, mds_adl_summary IS the sum of the 4 ADL self-performance items,
+    # each scored 0-6 (total range 0-24), then scaled to 0-28 per the MDS 3.0 standard.
+    # Letting CTGAN generate this independently produces clinically impossible
+    # negative correlations with its own component subscores. Fixed post-generation.
+    adl_sum = (df["adl_eating"] + df["adl_mobility"] +
+               df["adl_toileting"] + df["adl_cognition"])  # range: 0-24
+    df["mds_adl_summary"] = np.clip(adl_sum * (28.0 / 24.0), 0, 28).round(1)
+
     # Recompute label after noise
     demand = adl_demand_score(
         df["adl_eating"].values,
@@ -227,7 +240,7 @@ def run_generation():
     logger.info(f"Metadata: {meta_path}")
 
     # Step 5: Quick summary
-    print("\n── Dataset Generation Summary ────────────────────────────")
+    print("\n-- Dataset Generation Summary ------------------------------------")
     for fid, meta in facility_metadata.items():
         print(f"  Facility {fid:02d} [{meta['care_type']}]: "
               f"{meta['n_rows']} rows, mismatch={meta['mismatch_rate']:.1%}")

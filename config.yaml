@@ -57,7 +57,7 @@ data:
     train: 0.60
     val:   0.20
     test:  0.20
-  held_out_facilities: [8, 9]  # 1 SNF + 1 MC reserved for final evaluation
+  held_out_facilities: [8, 9]  # Both IL (Independent Living) — held out for final evaluation
 
   fidelity:
     ks_alpha: 0.05              # KS-test significance threshold
@@ -103,7 +103,7 @@ dp:
   delta: 1.0e-5
   max_grad_norm: 1.0
   epsilon_values: [1, 2, 5, 10, null]  # null = no DP (ε=∞)
-  recommended_epsilon: 2               # hypothesis: ε≥2 preserves utility
+  recommended_epsilon: 10              # confirmed: ε=10 best utility (15.7% drop); ε=5 causes 27.3% drop post seed-fix
 
 # ── M4: XAI Audit ─────────────────────────────────────────────────────────────
 xai:

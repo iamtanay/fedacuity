@@ -193,7 +193,7 @@ def plot_ks_distributions(
     for j in range(len(features), len(axes)):
         axes[j].set_visible(False)
 
-    plt.suptitle("Synthetic vs MIMIC-IV: Feature Distribution Comparison (Figure 2)", fontsize=11)
+    plt.suptitle("Synthetic Data Fidelity Validation (Figure 2)\n[Note: MIMIC-IV access pending; validation uses 20% synthetic holdout as proxy]", fontsize=10)
     plt.tight_layout()
 
     save_path = save_path or FIGURES_DIR / "fig2_fidelity_distributions.png"
@@ -247,15 +247,15 @@ def run_fidelity_validation():
     plot_ks_distributions(synthetic_df, mimic_df, ks_results)
 
     # 5. Summary
-    print("\n── Fidelity Validation Summary (C2) ─────────────────────")
-    print(f"  KS-test: {ks_results['passes_alpha'].sum()}/{len(ks_results)} features pass α={KS_ALPHA}")
+    print("\n-- Fidelity Validation Summary (C2) --------------------------")
+    print(f"  KS-test: {ks_results['passes_alpha'].sum()}/{len(ks_results)} features pass alpha={KS_ALPHA}")
     print(f"  Frobenius norm (synthetic vs MIMIC-IV): {frobenius_results['frobenius_norm']:.4f}")
     if "frobenius_norm_baseline" in frobenius_results:
         print(f"  Frobenius norm (random baseline):       {frobenius_results['frobenius_norm_baseline']:.4f}")
     print(f"  TSTR AUC: {tstr_results['tstr_auc']:.4f} | TRTR AUC: {tstr_results['trtr_auc']:.4f} | "
           f"Gap: {tstr_results['gap']:.4f} | Target: <{TSTR_GAP_THRESHOLD:.0%}")
-    status = "PASS ✓ — C2 Contribution validated" if tstr_results["passes"] else \
-             "FAIL ✗ — Retune CTGAN (increase epochs or try GaussianCopula)"
+    status = "PASS - C2 Contribution validated" if tstr_results["passes"] else \
+             "FAIL - Retune CTGAN (increase epochs or try GaussianCopula)"
     print(f"  TSTR result: {status}")
 
 

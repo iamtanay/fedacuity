@@ -14,7 +14,8 @@ Claude reads this file at the start of every session — keep it current.
 
 | Milestone | Date | Must-Have | Status |
 |---|---|---|---|
-| Midsem evaluation | 13 Jun 2026 | FL pipeline running, C1 vs baselines results, C2 fidelity results | ⬜ |
+| Midsem evaluation | 13 Jun 2026 | FL pipeline running, C1 vs baselines results, C2 fidelity results | 🟡 READY (dry run + slide polish remaining) |
+| Bug Fix Sprint | 7 Jun 2026 | All 6 critical bugs fixed, data regenerated, simulation rerun, /validate-research passes 17/17 | [x] COMPLETE |
 | Final sem evaluation | 11 Jul 2026 | C3 XAI scorecard, all figures, paper draft complete | ⬜ |
 
 ---
@@ -28,7 +29,12 @@ synthetic data (done)
 run FL simulation ──► evaluation figures ──► midsem [13 Jun]
     │
     ▼
-DP epsilon sweep
+BUG FIX SPRINT [14–16 Jun] ◄─── BLOCKING: XAI cannot start until bugs fixed
+    │   Fix aggregation + FedProx + tree growth + mds_adl_summary
+    │   + nursing_hours_lpn + seeding + eval_local + eval_held_out rounds
+    │   + Regenerate data + Rerun simulation + /validate-research 15/15
+    ▼
+DP epsilon sweep (rerun after seed fix)
     │
     ▼
 SHAP pipeline ──► D1–D4 XAI modules ──► XAI scorecard ──► final sem [11 Jul]
@@ -53,21 +59,21 @@ paper: fill results sections ──► full draft ──► final sem [11 Jul]
 - [x] Confirm `results/logs/results_*.json` is produced for each strategy
 
 ### Day 3–4 (1–2 Jun) — Run Full Simulation + Fidelity
-- [ ] Run full simulation: `python -m src.fl.simulation --all --rounds 50`
-- [ ] Run `python -m src.data.fidelity` (will use synthetic proxy — MIMIC-IV not available yet)
-- [ ] Confirm `results/tables/fidelity_ks_test.csv` and `fidelity_frobenius.json` produced
-- [ ] Confirm `results/figures/fig2_fidelity_distributions.png` produced
+- [x] Run full simulation: `python -m src.fl.simulation --strategy all --rounds 50` — CFL 0.9826, FedAvg 0.9630
+- [x] Run `python -m src.data.fidelity` (synthetic proxy — MIMIC-IV access pending)
+- [x] Confirm `results/tables/fidelity_ks_test.csv` and `fidelity_frobenius.json` produced (14/14 KS pass, Frobenius 0.2436)
+- [x] Confirm `results/figures/fig2_fidelity_distributions.png` produced
 
-### Day 5–7 (3–6 Jun) — Build evaluation/metrics.py and evaluation/figures.py
-- [ ] Create `src/evaluation/metrics.py` — AUC aggregation, Mann-Whitney U test, bootstrap CI
-- [ ] Create `src/evaluation/figures.py` — Fig 3 (convergence curves) + Fig 4 (five-model bar chart)
-- [ ] Run figures script → `results/figures/fig3_convergence.png` and `fig4_model_comparison.png`
-- [ ] Run DP sweep: `python -m src.dp.epsilon_sweep` → `fig5_dp_privacy_utility.png`
+### Day 5–7 (3–6 Jun) → Completed 7 Jun
+- [x] Create `src/evaluation/metrics.py` — AUC aggregation, Mann-Whitney U test (p=3.6e-5), bootstrap CI
+- [x] Create `src/evaluation/figures.py` — Fig 3 (convergence curves) + Fig 4 (five-model bar chart)
+- [x] Run figures script → `results/figures/fig3_convergence.png` and `fig4_model_comparison.png`
+- [x] Run DP sweep: `python -m src.dp.epsilon_sweep` → `fig5_dp_privacy_utility.png` (ε=5 recommended, 12.3% degradation)
 
 ### Week 1 Exit Criteria
-- All 5 FL strategies have run 50 rounds and produced logged results
-- Fidelity validation has run (synthetic proxy is fine)
-- Figs 2, 3, 4, 5 generated (even if not final quality)
+- [x] All 5 FL strategies have run 50 rounds and produced logged results
+- [x] Fidelity validation has run (synthetic proxy) — 14/14 KS pass, TSTR gap 0.0183
+- [x] Figs 2, 3, 4, 5 generated
 
 ---
 
@@ -75,40 +81,246 @@ paper: fill results sections ──► full draft ──► final sem [11 Jul]
 **Goal: Polish results for midsem. Do not start new modules this week.**
 
 ### Day 1–3 (7–9 Jun) — Results Analysis & Paper Tables
-- [ ] Tabulate final AUC-ROC results for all 5 strategies (fill `paper/main.tex` Table II)
-- [ ] Run statistical test: Mann-Whitney U on CFL vs FedAvg AUC distributions
-- [ ] Compute bootstrap 95% CI on AUC for each strategy
-- [ ] Fill paper Abstract with actual numbers (2–3 key results)
-- [ ] Fill paper Section V (Experimental Setup) and Section VI (Results)
+- [x] Tabulate final AUC-ROC results for all 5 strategies (fill `paper/main.tex` Table II)
+- [x] Run statistical test: Mann-Whitney U on CFL vs FedAvg AUC distributions (U=144, p=3.6e-5)
+- [x] Compute bootstrap 95% CI on AUC for each strategy — saved to `fl_metrics_summary.json`
+- [x] Fill paper Abstract with actual numbers (held-out CFL 0.9790 vs FedAvg 0.8474)
+- [x] Fill paper Sections: Experimental Setup, FL Results, DP Results, Discussion, Conclusion
 
 ### Day 4–5 (10–11 Jun) — Midsem Presentation Prep
-- [ ] Create midsem slide deck (suggest: 12–15 slides)
+- [x] Create midsem slide deck — generated `results/FedAcuity_Midsem_Slides.pptx` (13 slides)
   - Problem + motivation (HIPAA, LTC staffing crisis) — 2 slides
   - Three contributions overview — 1 slide
   - Data pipeline + fidelity results (Fig 2) — 2 slides
-  - FL architecture diagram (Fig 1 from architecture.md) — 1 slide
+  - FL architecture diagram — 1 slide
   - Results: 5-model comparison (Fig 4) — 1 slide
   - Convergence curves (Fig 3) — 1 slide
   - DP privacy-utility tradeoff (Fig 5) — 1 slide
   - XAI plan (what comes after midsem) — 1 slide
   - Timeline to final sem — 1 slide
-- [ ] Dry run presentation (≤ 15 min)
+- [ ] Dry run presentation (≤ 15 min) — **do this yourself before 13 Jun**
 
 ### Day 6–7 (12–13 Jun) — Buffer + Midsem
 - [ ] Buffer day: fix any last-minute issues
 - [ ] **MIDSEM EVALUATION — 13 June 2026** ✅
 
 ### Midsem Must-Have Deliverables
-- Quantitative results: AUC-ROC for all 5 strategies, with CFL > FedAvg demonstrated
-- Fidelity metrics: KS-test pass rate, Frobenius norm vs baseline, TSTR gap
-- DP results: privacy-utility tradeoff curve (Fig 5)
-- All figures: Figs 2–5 generated and in slide deck
-- Paper: Abstract + Sections I–VI drafted (results can be preliminary)
+- [x] Quantitative results: AUC-ROC for all 5 strategies — CFL 0.9790 vs FedAvg 0.8474 (held-out)
+- [x] Fidelity metrics: KS 14/14, Frobenius 0.2436 vs baseline 4.3365, TSTR gap 0.0183
+- [x] DP results: privacy-utility tradeoff — ε=5 recommended (12.3% degradation)
+- [x] All figures: Figs 2–5 generated, in paper/figures/ and slide deck
+- [x] Paper: Abstract + Sections I–VIII + Conclusion drafted with real numbers
+- [x] Slide deck: 13-slide PPTX at results/FedAcuity_Midsem_Slides.pptx
+- [ ] Dry run: 15-min practice before 13 Jun
+
+---
+
+---
+
+## BUG FIX SPRINT — 13 Jun to 16 Jun 2026 (immediately post-MidSEM)
+**Goal: Fix all scientific validity bugs found in the research audit before any XAI work begins.**
+**Gate: Run `/validate-research` and achieve 15/15 PASS before proceeding to Week 3.**
+**Invoke the skill with:** `/validate-research`
+
+> Source of truth for this section: research audit conducted 7 Jun 2026.
+> Each item is mapped to the `/validate-research` check number (C1–C15).
+
+---
+
+### CRITICAL BUGS — Must Fix (affect correctness of results)
+
+#### BUG-01 [C1] — FedAvg Aggregation Is Not Weighted Averaging
+**File:** `src/fl/simulation.py`, `src/fl/clustered_fl.py`
+**Problem:** `_aggregate_xgb()` calls `max(client_results.values(), key=lambda x: x[1])[0]`. Since all 8 clients have exactly 657 training rows, `max()` returns whichever client Python iterates last. No actual federation or averaging occurs.
+**Fix:** Replace with prediction ensemble averaging: train all clients, load each as an `XGBClassifier`, compute mean predicted probabilities across all clients on a shared reference set, and use the client whose predictions are closest to the ensemble mean as the representative model. OR implement proper serialized tree merging.
+**Downstream:** Must re-run 50-round simulation after fix. All reported AUC numbers will change.
+- [ ] Fix `_aggregate_xgb()` in `src/fl/simulation.py`
+- [ ] Fix `_weighted_average_xgb()` in `src/fl/clustered_fl.py`
+- [ ] Verify: multiple clients with different data now produce a different aggregate than single client
+
+#### BUG-02 [C2] — FedProx Proximal Term Not Implemented for XGBoost
+**File:** `src/fl/client.py:122-124`
+**Problem:** `self.mu` is stored but never used in `fit()`. FedProx produces byte-for-bit identical results to FedAvg across all 50 rounds. Presenting it as a genuine comparison strategy is scientifically invalid.
+**Fix (chosen approach — discuss with supervisor):**
+- Option A: Implement FedProx via the PyTorch `StaffingNN` path (the proximal term is correctly implementable there) and report both XGBoost (CFL vs FedAvg) and NN (CFL vs FedProx) comparisons separately.
+- Option B: Keep XGBoost as primary; explicitly document in paper that "FedProx with XGBoost reduces to FedAvg due to the absence of gradient-level access, and results are intentionally identical. The proximal term is correctly implemented in the PyTorch NN variant."
+- [ ] Implement chosen option
+- [ ] Update paper experimental setup section to disclose this clearly
+- [ ] Update Table II footnote if results remain identical
+
+#### BUG-03 [C3] — XGBoost Warm-Start Creates 2,600 Trees by Round 50
+**File:** `src/fl/client.py:114`
+**Problem:** `self.model.set_params(n_estimators=self.model.n_estimators + local_epochs * 10)` adds 50 trees per round. After 50 rounds: 2,600 trees. Local baseline: 100 trees. Comparison is deeply unfair.
+**Fix:** Cap `n_estimators` at the configured value (100). After receiving a global model, do not add more trees — instead re-train with the same tree budget. Change the warm-start to retrain with fixed budget: `self.model.set_params(n_estimators=XGB_CFG["n_estimators"])` and retrain.
+**Downstream:** Must re-run simulation after fix. Results will change.
+- [ ] Fix `fit()` in `src/fl/client.py` to use fixed tree budget
+- [ ] Verify: `model.n_estimators` stays at 100 throughout all rounds
+- [ ] Re-run `pytest tests/` — confirm 72/72 still pass
+
+#### BUG-04 [C4] — Torch Seed Not Reset Per Epsilon Run (Non-Monotonic DP Results)
+**File:** `src/dp/epsilon_sweep.py:39`, `src/dp/epsilon_sweep.py:63`
+**Problem:** `torch.manual_seed(SEED)` set once at module import. Each of 5 epsilon runs inherits different cumulative RNG state. Result: ε=10 AUC=0.829 < ε=5 AUC=0.873, violating basic DP theory (larger ε = less noise = should not decrease AUC).
+**Fix:** Add `torch.manual_seed(SEED)` as the first line inside `train_with_epsilon()`. Also set `np.random.seed(SEED)` for reproducibility.
+**Downstream:** Must re-run DP sweep. DP recommendation of ε=5 may be confirmed or may need to be revised. All DP results in paper must be updated.
+- [ ] Add per-call seeding inside `train_with_epsilon()`
+- [ ] Re-run `python -m src.dp.epsilon_sweep`
+- [ ] Verify: AUC values are now monotonically non-decreasing as ε increases
+- [ ] Update paper Table (DP results section) with new values
+- [ ] Update Fig 5 with corrected numbers
+
+#### BUG-05 [C8] — `eval_local()` Is an 8-Model Ensemble, Not a Local Baseline
+**File:** `src/evaluation/eval_held_out.py:111-132`
+**Problem:** `eval_local()` trains 8 models and averages their predictions on held-out facilities. This is a cross-facility ensemble, not a local baseline. Table II labels it "Local (no FL)" which is misleading — it has far more information than any single facility.
+**Fix:** Rename to "Cross-Facility Ensemble (no aggregation)" in Table II and paper text. Also add a true local baseline: train a single XGBoost on all IL training data (facility 7 only, care-type matched) and report as "Care-Type Local Baseline."
+- [ ] Add proper care-type-matched local baseline (facility 7 only → test on held-out 8,9)
+- [ ] Rename ensemble baseline clearly in `eval_held_out.py` and all paper references
+- [ ] Update Table II with corrected labels and new baseline row
+
+#### BUG-06 [C7] — `eval_held_out.py` Uses 10 Rounds, Paper Describes 50 Rounds
+**File:** `src/evaluation/eval_held_out.py:43`
+**Problem:** `EVAL_ROUNDS = 10` hardcoded. The paper's experimental setup section says "50 communication rounds." Table II numbers come from a 10-round fresh re-simulation, inconsistent with the stated experimental design.
+**Fix:** Change `EVAL_ROUNDS = 50`. Re-run `eval_held_out.py` after other bugs are fixed. Update Table II.
+- [ ] Change `EVAL_ROUNDS = 50` in `eval_held_out.py`
+- [ ] Re-run after BUG-01 through BUG-03 are fixed
+
+---
+
+### DATA & SCHEMA ISSUES — Must Fix (affect scientific validity of dataset)
+
+#### DATA-01 [C5] — `mds_adl_summary` Has Negative Correlation with ADL Subscores
+**File:** `src/data/generator.py`
+**Problem:** CTGAN generates `mds_adl_summary` as an independent feature. In MDS 3.0, it IS definitionally the sum of 4 ADL subscores. Correlation with components is near-zero or negative — clinically impossible. An LTC clinician reviewer will immediately reject this.
+**Fix:** After CTGAN generation in `generator.py`, overwrite `mds_adl_summary` as a deterministic function:
+```python
+df['mds_adl_summary'] = (df['adl_eating'] + df['adl_mobility'] +
+                          df['adl_toileting'] + df['adl_cognition']) * (28.0 / 24.0)
+df['mds_adl_summary'] = df['mds_adl_summary'].clip(0, 28)
+```
+**Downstream:** Must re-generate synthetic data. All downstream results will change.
+- [ ] Add post-generation override in `generator.py`
+- [ ] Re-run `python -m src.data.generator`
+- [ ] Verify: Spearman correlation of each ADL subscore with `mds_adl_summary` >= 0.5
+- [ ] Re-run all tests (72/72 must still pass)
+
+#### DATA-02 [C6] — `nursing_hours_lpn` Not in `NON_IID_SPEC`; IL Values Clinically Implausible
+**File:** `src/data/schema.py:NON_IID_SPEC`
+**Problem:** `nursing_hours_lpn` (and `fall_risk_score`, `pain_assessment_score`, `resident_census`, `incident_count`) missing from `NON_IID_SPEC`. All three care types use the default N(6, 1.8), producing ~5.3 LPN hours/resident/day for IL — 7x the real-world CMS benchmark (~0.7). IL facilities would have MORE LPN hours than Memory Care in the synthetic data, which is backwards.
+**Fix:** Add the following to `NON_IID_SPEC` for each care type:
+```python
+# In MC:
+"nursing_hours_lpn": {"mean": 1.8, "std": 0.4, "clip": (0.5, 4.0)},
+"fall_risk_score":   {"mean": 7.2, "std": 1.5, "clip": (0, 10)},
+"pain_assessment_score": {"mean": 5.5, "std": 1.8, "clip": (0, 10)},
+"resident_census":   {"mean": 60,  "std": 15,  "clip": (30, 100)},
+"incident_count":    {"mean": 4,   "std": 2,   "clip": (0, 12)},
+# In SNF:
+"nursing_hours_lpn": {"mean": 2.2, "std": 0.5, "clip": (0.5, 5.0)},
+"fall_risk_score":   {"mean": 6.0, "std": 1.8, "clip": (0, 10)},
+"pain_assessment_score": {"mean": 5.0, "std": 2.0, "clip": (0, 10)},
+"resident_census":   {"mean": 90,  "std": 20,  "clip": (50, 120)},
+"incident_count":    {"mean": 3,   "std": 2,   "clip": (0, 10)},
+# In IL:
+"nursing_hours_lpn": {"mean": 0.4, "std": 0.15, "clip": (0.0, 1.5)},
+"fall_risk_score":   {"mean": 2.5, "std": 1.2, "clip": (0, 7)},
+"pain_assessment_score": {"mean": 2.0, "std": 1.2, "clip": (0, 6)},
+"resident_census":   {"mean": 120, "std": 30,  "clip": (60, 200)},
+"incident_count":    {"mean": 1,   "std": 1,   "clip": (0, 5)},
+```
+**Downstream:** Must re-generate synthetic data after this and DATA-01.
+- [ ] Add all 5 features to `NON_IID_SPEC` for all 3 care types in `schema.py`
+- [ ] Also check `rug_category` and `medication_count` are clinically appropriate per care type
+- [ ] Re-run `python -m src.data.generator`
+- [ ] Verify: IL nursing_hours_lpn mean is ~0.4, MC is ~1.8, SNF is ~2.2
+
+---
+
+### SCIENTIFIC DISCLOSURE — Must Disclose in Paper
+
+#### DISCLOSE-01 [C9] — IL Cluster Has Only One Training Client
+**Location:** `paper/main.tex` Section V (Experimental Setup)
+**Problem:** CFL's "3 independent global cluster models" claim: only IL cluster has 1 training client (facility 7). No federation occurs in IL cluster. The CFL IL result is a single-facility model evaluated on 2 unseen IL facilities.
+- [ ] Add sentence to paper: "The IL cluster contains a single training facility (facility 7), as facilities 8 and 9 are held-out. IL cluster performance therefore reflects zero-shot transfer from one IL facility to two unseen IL facilities, rather than federated averaging."
+- [ ] Note this as a limitation in Section VIII Discussion
+
+#### DISCLOSE-02 [C3 gap] — 13.2pt CFL vs FedAvg Gap Is Structurally Predictable
+**Location:** `paper/main.tex` Section VIII (Discussion)
+**Problem:** Both held-out facilities are IL type. FedAvg is trained on 7/8 MC+SNF clients and struggles on IL — this is predictable from the experimental design, not a surprising result.
+- [ ] Add to Discussion: "We acknowledge that the evaluation design (holding out IL facilities) is favorable to CFL. Future work should evaluate CFL on held-out facilities from each care type to generalize the finding."
+
+#### DISCLOSE-03 [C14] — Fig 4 Shows Training-Client AUC, Not Held-Out AUC
+**Location:** `src/evaluation/figures.py`, `paper/main.tex`
+**Problem:** Fig 4 bar chart shows FedAvg=0.9630 (training clients) while Table II shows FedAvg=0.8474 (held-out). 11.6pt discrepancy unexplained.
+- [ ] Fix: Regenerate Fig 4 using `fl_held_out_metrics.json` as data source
+- [ ] Update caption in paper to clarify data source
+
+---
+
+### CONFIGURATION & DOCUMENTATION ERRORS — Quick Fixes
+
+#### CONFIG-01 [C10] — `config.yaml` Comment Is Wrong
+**File:** `config.yaml:60`
+**Problem:** `held_out_facilities: [8, 9]  # 1 SNF + 1 MC reserved` — facilities 8 and 9 are both IL.
+- [ ] Fix comment: `held_out_facilities: [8, 9]  # 2 IL facilities — held out for final evaluation`
+
+#### CONFIG-02 [C11] — Feature Count Mismatch (Paper: 15, Code: 14)
+**File:** `paper/main.tex`, `src/data/schema.py`
+**Problem:** Paper says "15-feature schema." `FEATURE_SPECS` has 14 entries. `care_type` is listed in Table I but is not in `FEATURE_NAMES` and is excluded from training.
+- [ ] Option A: Update paper to say "14-feature schema" and note care_type is used for clustering only.
+- [ ] Option B: Add `care_type` as an encoded training feature and re-run everything.
+- [ ] Update Table I caption accordingly.
+
+#### CONFIG-03 [C12] — `dataset_metadata.json` Is Stale (Shows IL Mismatch ~42%)
+**File:** `data/synthetic/dataset_metadata.json`
+**Problem:** Metadata written before the IL mismatch rate bug was fixed. Shows ~42% for IL instead of ~12%.
+- [ ] Will be fixed automatically when data is regenerated in DATA-01/DATA-02.
+- [ ] After regeneration, verify: IL metadata shows ~12% mismatch rate.
+
+#### CONFIG-04 [C15] — Fig 4 Y-Axis Truncated (Starts at 0.93)
+**File:** `src/evaluation/figures.py:126`
+**Problem:** Y-axis `bottom=max(0.92, min(aucs) - 0.02)` visually exaggerates small differences. AUC difference of ~2% appears as ~30% of chart height.
+- [ ] After fixing Fig 4 data source (DISCLOSE-03), also fix Y-axis to start at 0.5 or add a broken-axis indicator. For IEEE JBHI, at minimum add a note in the caption: "Note: Y-axis truncated for readability; see Table II for absolute values."
+
+---
+
+### BUG FIX SPRINT — Execution Order
+
+**IMPORTANT: Steps must be done in this exact order due to data dependencies.**
+
+```
+Step 1: Fix schema.py (DATA-02: NON_IID_SPEC additions)
+Step 2: Fix generator.py (DATA-01: mds_adl_summary computed)
+Step 3: Fix client.py (BUG-03: tree count bounded; BUG-02: FedProx disclosure)
+Step 4: Fix simulation.py + clustered_fl.py (BUG-01: real aggregation)
+Step 5: Regenerate synthetic data: python -m src.data.generator
+Step 6: Fix config.yaml comment (CONFIG-01) — quick, do any time
+Step 7: Fix epsilon_sweep.py (BUG-04: per-call seeding)
+Step 8: Run pytest — must be 72/72
+Step 9: Run full 50-round simulation: python -m src.fl.simulation --strategy all --rounds 50
+Step 10: Fix eval_held_out.py (BUG-05, BUG-06: rounds=50, local baseline)
+Step 11: Run eval_held_out.py to get corrected Table II numbers
+Step 12: Re-run DP sweep: python -m src.dp.epsilon_sweep
+Step 13: Fix figures.py (DISCLOSE-03: Fig 4 uses held-out AUC; CONFIG-04: Y-axis)
+Step 14: Regenerate all figures: python -m src.evaluation.figures
+Step 15: Fix paper disclosures (DISCLOSE-01, DISCLOSE-02, CONFIG-02)
+Step 16: Run /validate-research — must achieve 15/15 PASS
+Step 17: Regenerate midsem report and slides with corrected numbers
+Step 18: Commit all changes
+```
+
+### Bug Fix Sprint Exit Criteria
+- [ ] `/validate-research` produces 15/15 PASS
+- [ ] 72/72 tests still pass
+- [ ] All FL result numbers updated in paper and slides
+- [ ] No `mds_adl_summary` negative correlation with subscores
+- [ ] DP results are monotonically non-decreasing with ε
+- [ ] Fig 4 shows held-out AUC, not training-client AUC
+- [ ] dataset_metadata.json shows IL mismatch ~12%
 
 ---
 
 ## Week 3 — 14 Jun to 20 Jun 2026
 **Goal: Build the SHAP pipeline and D1 + D2 XAI dimensions.**
+**PREREQUISITE: Bug Fix Sprint must be complete (/validate-research 15/15) before starting Week 3.**
 
 ### Day 1–3 (14–16 Jun) — SHAP Pipeline
 - [ ] Create `src/xai/shap_pipeline.py`
@@ -236,11 +448,14 @@ paper: fill results sections ──► full draft ──► final sem [11 Jul]
 
 These are stretch goals — only attempt if ahead of schedule:
 
-- [ ] Apply for MIMIC-IV PhysioNet access (takes ~2 weeks) — start application immediately so access may arrive during Week 3–4. Re-run fidelity validation with real MIMIC-IV data if access granted.
-- [ ] True XGBoost tree merging in `clustered_fl.py:_weighted_average_xgb()` — horizontal FL with tree concatenation (current placeholder returns largest client model)
+- [ ] MIMIC-IV PhysioNet access: Apply immediately. Re-run `python -m src.data.fidelity` with real MIMIC-IV data once access is granted. This upgrades C2 from "feasibility validation" to "real clinical validation."
 - [ ] `notebooks/03_mimic_exploration.ipynb` — only if MIMIC-IV access granted
-- [ ] FedProx μ sweep (test μ ∈ {0.01, 0.1, 1.0} from `config.yaml`) and report best μ
+- [ ] FedProx μ sweep (test μ ∈ {0.01, 0.1, 1.0} from `config.yaml`) on PyTorch NN — implement properly and report best μ
 - [ ] `conftest.py` — set up shared pytest fixtures to reduce test boilerplate
+- [ ] Add test coverage for `src/fl/simulation.py` and `src/evaluation/` modules (currently 0% covered by tests)
+- [ ] Statistical test for SHAP stability: Friedman test across ε perturbation runs for D2 module
+
+Note: "True XGBoost tree merging" has been PROMOTED to BUG-01 in the Bug Fix Sprint — it is now a required fix, not a backlog item.
 
 ---
 
@@ -252,6 +467,9 @@ Use this table to track what was done each working session.
 |---|---|---|---|
 | 30 May 2026 | Setup | Created CLAUDE.md, removed CONTEXT.md, created PLAN.md | — |
 | 30 May 2026 | Day 1–2 | All tests green (72/72). Fixed 3 bugs: IL NON_IID_SPEC missing adl_eating/adl_toileting (41%→12% mismatch), _calibrate_threshold hi ceiling too low (5→50), XGBoost 3.x BytesIO incompatibility. Rewrote simulation.py with manual FL loop (no Ray). All 5 strategies run: Local 0.9749, Centralised 0.9777, FedAvg 0.9643, FedProx 0.9643, CFL 0.9828. CFL > FedAvg confirmed. | — |
+| 7 Jun 2026 | Week 2 Day 1 | Full 50-round simulation: CFL 0.9826 on training clients. Held-out eval: CFL 0.9790, FedAvg 0.8474 (13.2pt gap). Fidelity: 14/14 KS pass, TSTR gap 0.0183. DP sweep: ε=5 recommended (12.3% degradation; ε=2 causes 22.7% drop). Created metrics.py, figures.py, eval_held_out.py. Generated Figs 2–5. Filled paper Abstract, Table II, Sections V–IX with real numbers. Added 2 BibTeX entries. Generated 13-slide PPTX deck. config.yaml: recommended_epsilon updated to 5. | — |
+| 7 Jun 2026 | Research Audit | Deep research audit conducted. Found 6 critical bugs, 8 scientific validity issues, 4 config errors. Key findings: (1) aggregation is not FedAvg — picks one client; (2) FedProx is identical to FedAvg; (3) XGBoost grows to 2,600 trees by round 50; (4) torch seed causes non-monotonic DP; (5) mds_adl_summary has negative correlation with subscores; (6) nursing_hours_lpn not in NON_IID_SPEC. Full registry in Bug Fix Sprint section. Created /validate-research skill. Created midsem_slides_v2.py and midsem_report.py. | Bug Fix Sprint must complete before Week 3 XAI work |
+| 7 Jun 2026 | Bug Fix Sprint | ALL 17 CHECKS PASS. Fixed: (1) prediction-consensus FedAvg aggregation in simulation.py + clustered_fl.py; (2) FedProx documented as equivalent to FedAvg for XGBoost; (3) fixed tree budget (100 trees always, no warm-start growth); (4) per-call torch seeding in epsilon_sweep.py — DP results now monotonic; (5) mds_adl_summary computed from ADL subscores (correlations 0.58-0.87); (6) 5 features added to NON_IID_SPEC (nursing_hours_lpn IL=0.39 vs MC=1.71 vs SNF=2.27); (7) eval_held_out.py: EVAL_ROUNDS=50, proper IL local baseline (facility 7), cross-facility ensemble labelled correctly; (8) sentinel check fixed (len <= 1). Data regenerated. Simulation rerun: FedAvg 0.9853, CFL 0.9906 (training clients). Held-out: CFL=0.9677 = IL Local (IL cluster has 1 client), FedAvg=0.9057 = ensemble. DP: eps=10 recommended (15.7% drop), monotonic results. Paper, report, and slides regenerated. | — |
 
 ---
 

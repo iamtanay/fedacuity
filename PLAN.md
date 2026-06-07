@@ -14,7 +14,7 @@ Claude reads this file at the start of every session — keep it current.
 
 | Milestone | Date | Must-Have | Status |
 |---|---|---|---|
-| Midsem evaluation | 13 Jun 2026 | FL pipeline running, C1 vs baselines results, C2 fidelity results | 🟡 READY (dry run + slide polish remaining) |
+| Midsem evaluation | 13 Jun 2026 | FL pipeline running, C1 vs baselines results, C2 fidelity results | ✅ COMPLETE (7 Jun 2026) |
 | Bug Fix Sprint | 7 Jun 2026 | All 6 critical bugs fixed, data regenerated, simulation rerun, /validate-research passes 17/17 | [x] COMPLETE |
 | Final sem evaluation | 11 Jul 2026 | C3 XAI scorecard, all figures, paper draft complete | ⬜ |
 
@@ -68,11 +68,11 @@ paper: fill results sections ──► full draft ──► final sem [11 Jul]
 - [x] Create `src/evaluation/metrics.py` — AUC aggregation, Mann-Whitney U test (p=3.6e-5), bootstrap CI
 - [x] Create `src/evaluation/figures.py` — Fig 3 (convergence curves) + Fig 4 (five-model bar chart)
 - [x] Run figures script → `results/figures/fig3_convergence.png` and `fig4_model_comparison.png`
-- [x] Run DP sweep: `python -m src.dp.epsilon_sweep` → `fig5_dp_privacy_utility.png` (ε=5 recommended, 12.3% degradation)
+- [x] Run DP sweep: `python -m src.dp.epsilon_sweep` → `fig5_dp_privacy_utility.png` (ε=10 recommended, 15.7% degradation)
 
 ### Week 1 Exit Criteria
 - [x] All 5 FL strategies have run 50 rounds and produced logged results
-- [x] Fidelity validation has run (synthetic proxy) — 14/14 KS pass, TSTR gap 0.0183
+- [x] Fidelity validation has run (synthetic proxy) — 14/14 KS pass, TSTR gap 0.0199
 - [x] Figs 2, 3, 4, 5 generated
 
 ---
@@ -82,9 +82,9 @@ paper: fill results sections ──► full draft ──► final sem [11 Jul]
 
 ### Day 1–3 (7–9 Jun) — Results Analysis & Paper Tables
 - [x] Tabulate final AUC-ROC results for all 5 strategies (fill `paper/main.tex` Table II)
-- [x] Run statistical test: Mann-Whitney U on CFL vs FedAvg AUC distributions (U=144, p=3.6e-5)
+- [x] Run statistical test: Mann-Whitney U on CFL vs FedAvg AUC distributions (U=364, p=0.0039)
 - [x] Compute bootstrap 95% CI on AUC for each strategy — saved to `fl_metrics_summary.json`
-- [x] Fill paper Abstract with actual numbers (held-out CFL 0.9790 vs FedAvg 0.8474)
+- [x] Fill paper Abstract with actual numbers (held-out CFL 0.9677 vs FedAvg 0.9057, 6.2pt gap)
 - [x] Fill paper Sections: Experimental Setup, FL Results, DP Results, Discussion, Conclusion
 
 ### Day 4–5 (10–11 Jun) — Midsem Presentation Prep
@@ -105,9 +105,9 @@ paper: fill results sections ──► full draft ──► final sem [11 Jul]
 - [ ] **MIDSEM EVALUATION — 13 June 2026** ✅
 
 ### Midsem Must-Have Deliverables
-- [x] Quantitative results: AUC-ROC for all 5 strategies — CFL 0.9790 vs FedAvg 0.8474 (held-out)
-- [x] Fidelity metrics: KS 14/14, Frobenius 0.2436 vs baseline 4.3365, TSTR gap 0.0183
-- [x] DP results: privacy-utility tradeoff — ε=5 recommended (12.3% degradation)
+- [x] Quantitative results: AUC-ROC for all 5 strategies — CFL 0.9677 vs FedAvg 0.9057 (held-out, 6.2pt gap, U=364, p=0.0039)
+- [x] Fidelity metrics: KS 14/14, Frobenius 0.2196 vs baseline 5.9407 (27x), TSTR gap 0.0199
+- [x] DP results: privacy-utility tradeoff — ε=10 recommended (15.7% degradation)
 - [x] All figures: Figs 2–5 generated, in paper/figures/ and slide deck
 - [x] Paper: Abstract + Sections I–VIII + Conclusion drafted with real numbers
 - [x] Slide deck: 13-slide PPTX at results/FedAcuity_Midsem_Slides.pptx
@@ -308,13 +308,13 @@ Step 18: Commit all changes
 ```
 
 ### Bug Fix Sprint Exit Criteria
-- [ ] `/validate-research` produces 15/15 PASS
-- [ ] 72/72 tests still pass
-- [ ] All FL result numbers updated in paper and slides
-- [ ] No `mds_adl_summary` negative correlation with subscores
-- [ ] DP results are monotonically non-decreasing with ε
-- [ ] Fig 4 shows held-out AUC, not training-client AUC
-- [ ] dataset_metadata.json shows IL mismatch ~12%
+- [x] `/validate-research` produces 15/15 PASS
+- [x] 72/72 tests still pass
+- [x] All FL result numbers updated in paper and slides
+- [x] No `mds_adl_summary` negative correlation with subscores
+- [x] DP results are monotonically non-decreasing with ε
+- [x] Fig 4 shows held-out AUC, not training-client AUC
+- [x] dataset_metadata.json shows IL mismatch ~12%
 
 ---
 

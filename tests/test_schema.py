@@ -105,14 +105,22 @@ class TestCareTypesAndFacilities:
             assert fid in FACILITY_CARE_TYPES
 
     def test_held_out_count(self):
-        """Exactly 1 facility is held out (facility 9, IL). Facility 8 moved to IL training cluster."""
-        assert len(HELD_OUT_FACILITIES) == 1
+        """Exactly 2 facilities are held out: one SNF (6), one IL (9). Facility 8 moved to IL training cluster."""
+        assert len(HELD_OUT_FACILITIES) == 2
 
-    def test_held_out_facilities_are_not_in_all_clusters(self):
-        """Held-out facility should be IL care type."""
-        for fid in HELD_OUT_FACILITIES:
-            assert FACILITY_CARE_TYPES[fid] == "IL", (
-                f"Held-out facility {fid} should be IL, got {FACILITY_CARE_TYPES[fid]}"
+    def test_held_out_facilities_span_snf_and_il(self):
+        """Held-out facilities should cover one SNF and one IL care type (not MC, and not both the same type)."""
+        held_out_types = {FACILITY_CARE_TYPES[fid] for fid in HELD_OUT_FACILITIES}
+        assert held_out_types == {"SNF", "IL"}, (
+            f"Held-out care types should be {{SNF, IL}}, got {held_out_types}"
+        )
+
+    def test_each_cluster_retains_at_least_two_training_clients(self):
+        """Every cluster must keep >=2 non-held-out facilities so FL aggregation is genuine, not single-client."""
+        for care_type, facilities in CLUSTER_ASSIGNMENTS.items():
+            training = [fid for fid in facilities if fid not in HELD_OUT_FACILITIES]
+            assert len(training) >= 2, (
+                f"{care_type} cluster has only {len(training)} training client(s): {training}"
             )
 
 

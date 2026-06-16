@@ -120,7 +120,11 @@ FACILITY_CARE_TYPES = {
 # Held-out for final evaluation (not seen during FL training).
 # Facility 8 was moved from held-out to IL training cluster so CFL's IL
 # cluster has 2 training clients — enabling genuine intra-cluster FedAvg.
-HELD_OUT_FACILITIES = [9]  # Single IL facility; 9 facilities train, 1 held out.
+# One SNF facility (6) is also held out so the headline generalisation claim
+# is tested on a care type where the staffing-acuity signal is clinically
+# substantive (SNF mismatch target ~28%), not only on IL (~12%, lowest
+# clinical-monitoring need of the three care types) — see NON_IID_SPEC below.
+HELD_OUT_FACILITIES = [6, 9]  # One SNF + one IL facility; 8 facilities train.
 
 CLUSTER_ASSIGNMENTS = {
     "MC":  [0, 1, 2],

@@ -57,7 +57,7 @@ data:
     train: 0.60
     val:   0.20
     test:  0.20
-  held_out_facilities: [9]     # Facility 9 (IL) — single held-out for generalisation test; facility 8 now joins IL training cluster
+  held_out_facilities: [6, 9]  # Facility 6 (SNF) + facility 9 (IL) — one held-out per clinically substantive care type; facility 8 joins IL training cluster
 
   fidelity:
     ks_alpha: 0.05              # KS-test significance threshold
@@ -68,7 +68,7 @@ data:
 fl:
   rounds: 50
   fraction_fit: 1.0            # All clients participate each round
-  min_available_clients: 9
+  min_available_clients: 8
 
   fedavg:
     local_epochs: 5

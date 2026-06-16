@@ -1,6 +1,6 @@
 """
 FedAcuity -- Held-Out Evaluation (Table II)
-Evaluates all 5 strategies on held-out facility 9 (IL).
+Evaluates all 5 strategies on held-out facilities 6 (SNF) and 9 (IL).
 Computes AUC-ROC, F1, Precision, Recall on the same 50-round setting
 described in the paper's experimental setup section.
 
@@ -8,11 +8,24 @@ Facility 8 (IL) was moved into the IL training cluster so Clustered FL's
 IL cluster has 2 real training clients (7, 8) -- enabling genuine
 intra-cluster FedAvg instead of degenerating to single-client local training.
 
-Local baselines provided:
-  - "IL Care-Type Local": trained on facility 7 only (same care type, no federation)
-  - "Cross-Facility Ensemble": 9-model ensemble (labelled accurately, not as "Local")
+Facility 6 (SNF) is held out alongside facility 9 (IL) so the headline
+generalisation claim is tested on a care type where the staffing-acuity
+signal is clinically substantive (SNF mismatch target ~28%, moderate
+clinical-monitoring need) and not only on IL (~12%, the lowest-acuity,
+lowest-monitoring care type of the three). IL alone would have been a
+structurally convenient but clinically weak choice of held-out cohort.
+
+Local baselines provided (one per held-out care type, evaluated only
+against the held-out facility of the SAME care type -- a local model
+never sees, and is never scored on, a different care type):
+  - "IL Care-Type Local": trained on facility 7 only, evaluated on facility 9
+  - "SNF Care-Type Local": trained on facility 3 only, evaluated on facility 6
+  - "Cross-Facility Ensemble": 8-model ensemble (labelled accurately, not as "Local")
 
 For FL strategies: runs a 50-round simulation, then evaluates the final ensemble.
+Clustered FL evaluates each held-out facility against its own care-type
+cluster's final-round ensemble (IL facility -> IL cluster models, SNF
+facility -> SNF cluster models).
 
 Usage:
     python -m src.evaluation.eval_held_out
@@ -31,7 +44,7 @@ from sklearn.metrics import roc_auc_score, f1_score, precision_score, recall_sco
 
 from src.fl.client import FedAcuityClient, deserialize_xgb_model
 from src.data.loaders import load_all_facilities, load_held_out, pool_all_data, load_facility, get_facility_splits
-from src.data.schema import FACILITY_CARE_TYPES, HELD_OUT_FACILITIES, FEATURE_NAMES
+from src.data.schema import FACILITY_CARE_TYPES, HELD_OUT_FACILITIES, CLUSTER_ASSIGNMENTS, FEATURE_NAMES
 from src.config import cfg
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -48,6 +61,7 @@ XGB_CFG  = FL_CFG["xgboost"]
 # Must match paper's stated experimental setup
 EVAL_ROUNDS   = 50
 TRAINING_FIDS = sorted([fid for fid in FACILITY_CARE_TYPES if fid not in HELD_OUT_FACILITIES])
+HELD_OUT_CARE_TYPES = sorted({FACILITY_CARE_TYPES[fid] for fid in HELD_OUT_FACILITIES})
 
 
 def _compute_metrics(y_true: np.ndarray, y_proba: np.ndarray) -> dict:
@@ -82,7 +96,7 @@ def _aggregate_xgb_consensus(
 def _ensemble_predict_held_out(
     client_results: Dict[int, Tuple[bytes, int]],
 ) -> dict:
-    """Weighted ensemble prediction across all client models on held-out facilities."""
+    """Weighted ensemble prediction across all client models on every held-out facility."""
     held_out = load_held_out()
     per_facility = {}
     all_y_true, all_y_proba = [], []
@@ -105,8 +119,48 @@ def _ensemble_predict_held_out(
     return {"overall": overall, "per_facility": per_facility}
 
 
-def _run_fl_50rounds(strategy: str) -> Dict[int, Tuple[bytes, int]]:
-    """Run 50-round FL simulation and return final round client results."""
+def _ensemble_predict_held_out_by_cluster(
+    cluster_all_results: Dict[str, Dict[int, Tuple[bytes, int]]],
+) -> dict:
+    """
+    Per-held-out-facility ensemble prediction, where each facility is scored using
+    its OWN care-type cluster's final-round client models (not a flat global pool).
+    A SNF held-out facility is never evaluated against IL or MC cluster models.
+    """
+    held_out = load_held_out()
+    per_facility = {}
+    all_y_true, all_y_proba = [], []
+
+    for fid, splits in held_out.items():
+        care_type = FACILITY_CARE_TYPES[fid]
+        client_results = cluster_all_results.get(care_type, {})
+        if not client_results:
+            logger.warning(f"No cluster results for care type {care_type} (facility {fid}) -- skipping")
+            continue
+
+        X_test, y_test = splits["test"]
+        total_samples = sum(n for _, n in client_results.values())
+        proba_sum = np.zeros(len(X_test))
+
+        for _, (model_bytes, n_samples) in client_results.items():
+            model = deserialize_xgb_model(model_bytes)
+            weight = n_samples / total_samples
+            proba_sum += model.predict_proba(X_test.values)[:, 1] * weight
+
+        per_facility[str(fid)] = _compute_metrics(y_test.values, proba_sum)
+        all_y_true.append(y_test.values)
+        all_y_proba.append(proba_sum)
+
+    overall = _compute_metrics(np.concatenate(all_y_true), np.concatenate(all_y_proba))
+    return {"overall": overall, "per_facility": per_facility}
+
+
+def _run_fl_50rounds(strategy: str) -> Dict:
+    """
+    Run 50-round FL simulation.
+    Returns the full per-cluster client-results dict for "clustered", or the
+    flat global client-results dict for "fedavg"/"fedprox".
+    """
     clients = {fid: FedAcuityClient(facility_id=fid) for fid in TRAINING_FIDS}
 
     cluster_models: Dict[str, bytes | None] = {"MC": None, "SNF": None, "IL": None}
@@ -146,47 +200,63 @@ def _run_fl_50rounds(strategy: str) -> Dict[int, Tuple[bytes, int]]:
             logger.info(f"  [{strategy}] round {rnd}/{EVAL_ROUNDS}")
 
     if strategy == "clustered":
-        # Return IL cluster results (held-out facilities are IL)
-        return cluster_all_results.get("IL", {})
+        return cluster_all_results
     return global_all_results
 
 
 # ── Strategy evaluations ──────────────────────────────────────────────────────
 
-def eval_il_local() -> dict:
+def eval_local_baseline(care_type: str) -> dict:
     """
-    IL Care-Type Local Baseline: train on facility 7 only (same care type as held-out).
-    This is the correct local baseline — care-type-matched, single facility, no federation.
+    Care-Type Local Baseline: train on a single training facility of `care_type`
+    (no federation), evaluate only against held-out facilities of the SAME
+    care type -- a local model is never scored on a different care type's
+    held-out facility.
     """
-    logger.info("Evaluating IL CARE-TYPE LOCAL baseline (facility 7 only)")
-    df7 = load_facility(7)
-    (X_train, y_train), (X_val, y_val), _ = get_facility_splits(7, df7)
+    fid = min(fid for fid in CLUSTER_ASSIGNMENTS[care_type] if fid in TRAINING_FIDS)
+    logger.info(f"Evaluating {care_type} CARE-TYPE LOCAL baseline (facility {fid} only)")
+    df = load_facility(fid)
+    (X_train, y_train), (X_val, y_val), _ = get_facility_splits(fid, df)
 
     model = xgb.XGBClassifier(
         n_estimators=XGB_CFG["n_estimators"], max_depth=XGB_CFG["max_depth"],
-        learning_rate=XGB_CFG["learning_rate"], random_state=SEED + 7, verbosity=0,
+        learning_rate=XGB_CFG["learning_rate"], random_state=SEED + fid, verbosity=0,
     )
     model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
 
     held_out = load_held_out()
+    matching = {h: s for h, s in held_out.items() if FACILITY_CARE_TYPES[h] == care_type}
     per_facility, all_y_true, all_y_proba = {}, [], []
-    for fid, splits in held_out.items():
+    for h, splits in matching.items():
         X_test, y_test = splits["test"]
         y_proba = model.predict_proba(X_test.values)[:, 1]
-        per_facility[str(fid)] = _compute_metrics(y_test.values, y_proba)
+        per_facility[str(h)] = _compute_metrics(y_test.values, y_proba)
         all_y_true.append(y_test.values)
         all_y_proba.append(y_proba)
     overall = _compute_metrics(np.concatenate(all_y_true), np.concatenate(all_y_proba))
-    return {"overall": overall, "per_facility": per_facility}
+    return {"overall": overall, "per_facility": per_facility, "trained_on_facility": fid}
+
+
+def eval_il_local() -> dict:
+    return eval_local_baseline("IL")
+
+
+def eval_snf_local() -> dict:
+    return eval_local_baseline("SNF")
 
 
 def eval_cross_facility_ensemble() -> dict:
     """
-    Cross-Facility Ensemble (no aggregation): 9 local models, weighted average predictions.
-    This is NOT a 'local' baseline — it represents the best possible ensemble without
-    any federation protocol. Labelled accurately in Table II.
+    Cross-Facility Ensemble (no aggregation): N training-facility local models,
+    weighted average predictions. This is NOT a 'local' baseline -- it represents
+    the best possible ensemble without any federation protocol. Each held-out
+    facility is scored against the full pool regardless of care type, deliberately
+    -- this baseline answers "how good is the naive global ensemble", which is the
+    comparison Clustered FL and FedAvg both need to beat. Labelled accurately in
+    Table II.
     """
-    logger.info("Evaluating CROSS-FACILITY ENSEMBLE (9 models, no aggregation)")
+    n_models = len(TRAINING_FIDS)
+    logger.info(f"Evaluating CROSS-FACILITY ENSEMBLE ({n_models} models, no aggregation)")
     facilities = load_all_facilities()
     held_out = load_held_out()
 
@@ -260,20 +330,21 @@ def eval_fedprox() -> dict:
 
 
 def eval_clustered_fl() -> dict:
-    logger.info(f"Evaluating CLUSTERED FL (IL cluster, {EVAL_ROUNDS} rounds) on held-out")
-    # IL cluster has 2 training clients (facilities 7, 8) -- genuine intra-cluster
-    # FedAvg aggregation occurs each round, evaluated on the unseen facility 9.
-    final_results = _run_fl_50rounds("clustered")
-    if not final_results:
-        logger.warning("IL cluster returned no results")
+    logger.info(f"Evaluating CLUSTERED FL ({EVAL_ROUNDS} rounds) on held-out, per-cluster ensembles")
+    # Each held-out facility is scored using its own care-type cluster's models:
+    # facility 9 (IL) -> IL cluster (7, 8); facility 6 (SNF) -> SNF cluster (3, 4, 5).
+    cluster_all_results = _run_fl_50rounds("clustered")
+    if not any(cluster_all_results.values()):
+        logger.warning("Clustered FL returned no results for any cluster")
         return {}
-    return _ensemble_predict_held_out(final_results)
+    return _ensemble_predict_held_out_by_cluster(cluster_all_results)
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 EVALUATORS = {
     "il_local_baseline":        eval_il_local,
+    "snf_local_baseline":       eval_snf_local,
     "cross_facility_ensemble":  eval_cross_facility_ensemble,
     "centralised":              eval_centralised,
     "fedavg":                   eval_fedavg,
@@ -283,7 +354,8 @@ EVALUATORS = {
 
 DISPLAY_NAMES = {
     "il_local_baseline":       "IL Local (facility 7 only)",
-    "cross_facility_ensemble": "Cross-Facility Ensemble (no aggregation)",
+    "snf_local_baseline":      "SNF Local (facility 3 only)",
+    "cross_facility_ensemble": "Cross-Facility Ensemble (no protocol)",
     "centralised":             "Centralised Oracle",
     "fedavg":                  "FedAvg",
     "fedprox":                 "FedProx (mu=0.1, equiv. FedAvg for XGBoost)",
@@ -306,7 +378,8 @@ def main():
         json.dump(all_results, f, indent=2)
     logger.info(f"Saved: {out_path}")
 
-    print("\n-- Table II: Held-Out Evaluation (Facility 9, IL) ----------------")
+    held_out_label = ", ".join(f"{fid} ({FACILITY_CARE_TYPES[fid]})" for fid in HELD_OUT_FACILITIES)
+    print(f"\n-- Table II: Held-Out Evaluation (Facilities {held_out_label}) ----------------")
     print(f"  {'Strategy':<45} {'AUC-ROC':>8} {'F1':>8} {'Precision':>10} {'Recall':>8}")
     print(f"  {'-'*80}")
     for name, display in DISPLAY_NAMES.items():
@@ -319,6 +392,10 @@ def main():
                   f"{ov.get('f1', 0):.4f}   "
                   f"{ov.get('precision', 0):.4f}     "
                   f"{ov.get('recall', 0):.4f}")
+            for fid, fmetrics in result.get("per_facility", {}).items():
+                care = FACILITY_CARE_TYPES.get(int(fid), "?")
+                print(f"    facility {fid} ({care}):  AUC {fmetrics['auc_roc']:.4f}  "
+                      f"F1 {fmetrics['f1']:.4f}")
 
 
 if __name__ == "__main__":

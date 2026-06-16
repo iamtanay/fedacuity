@@ -21,12 +21,25 @@ build/
 data/mimic_iv/
 data/processed/
 
-# Results — regenerable, keep only final figures
+# Results — regenerable by rerunning the pipeline (src/fl/simulation.py,
+# src/evaluation/eval_held_out.py, src/evaluation/figures.py, src/data/fidelity.py)
 results/logs/
 results/tables/
+results/figures/*.png
+results/figures/*.pdf
+!results/figures/.gitkeep
+# Stray duplicate generated slide deck (correct copy lives in reports/)
+results/FedAcuity_Midsem_Slides.pptx
 
 # CTGAN model files (large)
 data/synthetic/*.pkl
+
+# Generated reports/slides (regenerable via src/presentation/midsem_report.py,
+# midsem_slides_v2.py). Institute-provided reference docs (templates, the
+# original hand-made deck, abstract phase PDF) are NOT generated and stay tracked.
+reports/FedAcuity_MidSEM_Report.docx
+reports/FedAcuity_MidSEM_Slides.pptx
+reports/FedAcuity_new.docx
 
 # OS
 .DS_Store

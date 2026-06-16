@@ -134,8 +134,8 @@ fedacuity/
 │   │   └── loaders.py        # Per-facility data loaders with train/val/test splits
 │   ├── fl/
 │   │   ├── client.py         # Flower FlowerClient — XGBoost local training (M2.1/2.2)
-│   │   ├── clustered_fl.py   # Domain-driven Clustered FL by care type (M2.5 — C1 core)
-│   │   └── simulation.py     # End-to-end simulation runner — all 5 strategies (M2.6)
+│   │   └── simulation.py     # End-to-end simulation runner — all 5 strategies, incl.
+│   │                         #   domain-driven Clustered FL by care type (M2.5/2.6 — C1 core)
 │   ├── dp/
 │   │   └── epsilon_sweep.py  # Opacus DP + ε sweep (M3)
 │   ├── xai/

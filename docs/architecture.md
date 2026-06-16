@@ -100,9 +100,9 @@ The Flower server coordinates the FL simulation. It implements three strategies:
 
 | Strategy | File | Aggregation Logic |
 |---|---|---|
-| **FedAvg** | `src/fl/simulation.py` | Weighted average of client model arrays by data size |
+| **FedAvg** | `src/fl/simulation.py` | Prediction-consensus weighted ensemble of client models by data size |
 | **FedProx** | `src/fl/simulation.py` | FedAvg + proximal regularisation (μ term) on client side |
-| **Clustered FL** | `src/fl/clustered_fl.py` | Intra-cluster FedAvg; 3 independent global models (MC / SNF / IL) |
+| **Clustered FL** | `src/fl/simulation.py` | Intra-cluster prediction-consensus ensemble; 3 independent cluster models (MC / SNF / IL) |
 
 ### Federation round lifecycle
 
@@ -168,8 +168,7 @@ config.yaml
     │       ▼
     ├── src/fl/client.py         ←── FedAcuityClient (Flower NumPyClient)
     │
-    ├── src/fl/simulation.py     ←── Run all 5 strategies (CLI)
-    ├── src/fl/clustered_fl.py   ←── CFL intra-cluster aggregation
+    ├── src/fl/simulation.py     ←── Run all 5 strategies (CLI); CFL intra-cluster aggregation lives here too
     │
     ├── src/dp/epsilon_sweep.py  ←── Opacus DP + ε ∈ {1,2,5,10,∞}
     │
@@ -249,8 +248,7 @@ fedacuity/
 │   │   └── loaders.py             ← Facility splits
 │   ├── fl/
 │   │   ├── client.py              ← Flower client (XGBoost)
-│   │   ├── clustered_fl.py        ← CFL aggregation
-│   │   └── simulation.py          ← All 5 strategy runner (CLI)
+│   │   └── simulation.py          ← All 5 strategy runner (CLI); CFL aggregation lives here too
 │   ├── dp/
 │   │   └── epsilon_sweep.py       ← Opacus DP sweep
 │   ├── xai/

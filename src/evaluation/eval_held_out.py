@@ -1,12 +1,16 @@
 """
 FedAcuity -- Held-Out Evaluation (Table II)
-Evaluates all 5 strategies on held-out facilities 8 and 9 (both IL).
+Evaluates all 5 strategies on held-out facility 9 (IL).
 Computes AUC-ROC, F1, Precision, Recall on the same 50-round setting
 described in the paper's experimental setup section.
 
+Facility 8 (IL) was moved into the IL training cluster so Clustered FL's
+IL cluster has 2 real training clients (7, 8) -- enabling genuine
+intra-cluster FedAvg instead of degenerating to single-client local training.
+
 Local baselines provided:
   - "IL Care-Type Local": trained on facility 7 only (same care type, no federation)
-  - "Cross-Facility Ensemble": 8-model ensemble (labelled accurately, not as "Local")
+  - "Cross-Facility Ensemble": 9-model ensemble (labelled accurately, not as "Local")
 
 For FL strategies: runs a 50-round simulation, then evaluates the final ensemble.
 
@@ -178,11 +182,11 @@ def eval_il_local() -> dict:
 
 def eval_cross_facility_ensemble() -> dict:
     """
-    Cross-Facility Ensemble (no aggregation): 8 local models, weighted average predictions.
+    Cross-Facility Ensemble (no aggregation): 9 local models, weighted average predictions.
     This is NOT a 'local' baseline — it represents the best possible ensemble without
     any federation protocol. Labelled accurately in Table II.
     """
-    logger.info("Evaluating CROSS-FACILITY ENSEMBLE (8 models, no aggregation)")
+    logger.info("Evaluating CROSS-FACILITY ENSEMBLE (9 models, no aggregation)")
     facilities = load_all_facilities()
     held_out = load_held_out()
 
@@ -257,8 +261,8 @@ def eval_fedprox() -> dict:
 
 def eval_clustered_fl() -> dict:
     logger.info(f"Evaluating CLUSTERED FL (IL cluster, {EVAL_ROUNDS} rounds) on held-out")
-    # Note: IL cluster has 1 training client (facility 7). No aggregation occurs in IL.
-    # This is a single-client IL model evaluated on 2 unseen IL facilities.
+    # IL cluster has 2 training clients (facilities 7, 8) -- genuine intra-cluster
+    # FedAvg aggregation occurs each round, evaluated on the unseen facility 9.
     final_results = _run_fl_50rounds("clustered")
     if not final_results:
         logger.warning("IL cluster returned no results")
@@ -302,7 +306,7 @@ def main():
         json.dump(all_results, f, indent=2)
     logger.info(f"Saved: {out_path}")
 
-    print("\n-- Table II: Held-Out Evaluation (Facilities 8 & 9, IL) ----------------")
+    print("\n-- Table II: Held-Out Evaluation (Facility 9, IL) ----------------")
     print(f"  {'Strategy':<45} {'AUC-ROC':>8} {'F1':>8} {'Precision':>10} {'Recall':>8}")
     print(f"  {'-'*80}")
     for name, display in DISPLAY_NAMES.items():

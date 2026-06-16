@@ -57,7 +57,7 @@ data:
     train: 0.60
     val:   0.20
     test:  0.20
-  held_out_facilities: [8, 9]  # Both IL (Independent Living) — held out for final evaluation
+  held_out_facilities: [9]     # Facility 9 (IL) — single held-out for generalisation test; facility 8 now joins IL training cluster
 
   fidelity:
     ks_alpha: 0.05              # KS-test significance threshold
@@ -68,7 +68,7 @@ data:
 fl:
   rounds: 50
   fraction_fit: 1.0            # All clients participate each round
-  min_available_clients: 8
+  min_available_clients: 9
 
   fedavg:
     local_epochs: 5

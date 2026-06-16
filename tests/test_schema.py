@@ -105,11 +105,11 @@ class TestCareTypesAndFacilities:
             assert fid in FACILITY_CARE_TYPES
 
     def test_held_out_count(self):
-        """Exactly 2 facilities are held out."""
-        assert len(HELD_OUT_FACILITIES) == 2
+        """Exactly 1 facility is held out (facility 9, IL). Facility 8 moved to IL training cluster."""
+        assert len(HELD_OUT_FACILITIES) == 1
 
     def test_held_out_facilities_are_not_in_all_clusters(self):
-        """Held-out facilities should be in IL cluster (IDs 8 and 9)."""
+        """Held-out facility should be IL care type."""
         for fid in HELD_OUT_FACILITIES:
             assert FACILITY_CARE_TYPES[fid] == "IL", (
                 f"Held-out facility {fid} should be IL, got {FACILITY_CARE_TYPES[fid]}"

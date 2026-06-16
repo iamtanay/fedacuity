@@ -117,8 +117,10 @@ FACILITY_CARE_TYPES = {
     7: "IL",  8: "IL",  9: "IL",
 }
 
-# Held-out for final evaluation (not seen during FL training)
-HELD_OUT_FACILITIES = [8, 9]  # IL + IL
+# Held-out for final evaluation (not seen during FL training).
+# Facility 8 was moved from held-out to IL training cluster so CFL's IL
+# cluster has 2 training clients — enabling genuine intra-cluster FedAvg.
+HELD_OUT_FACILITIES = [9]  # Single IL facility; 9 facilities train, 1 held out.
 
 CLUSTER_ASSIGNMENTS = {
     "MC":  [0, 1, 2],

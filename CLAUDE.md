@@ -28,7 +28,7 @@ Local (no federation) · Centralised Oracle · FedAvg · FedProx · Clustered FL
 
 - **Python 3.12** + plain `venv` (NOT conda)
 - **Platform:** Windows 11, PowerShell
-- Activate: `.venv\Scripts\Activate.ps1`
+- Activate: `venv\Scripts\Activate.ps1`  (venv name is `venv`, not `.venv`)
 - All deps in `requirements.txt` — latest versions as of April 2026, Python 3.12 compatible
 - Core packages: `flwr` (Flower FL), `sdv` (CTGAN), `xgboost`, `shap`, `opacus`, `torch`, `sklearn`, `scipy`, `matplotlib`
 - Verify imports: `python -c "import flwr, sdv, xgboost, shap, opacus; print('All good')"`
@@ -120,21 +120,18 @@ These are intentional scaffolds to be filled in later phases:
 
 | Location | What it is | When to fix |
 |---|---|---|
-| `src/fl/clustered_fl.py:_weighted_average_xgb()` | Returns the largest client's model as a proxy. Not true tree merging. | Week 8 |
 | `src/xai/scorecard.py:load_xai_results()` | Uses hardcoded placeholder scores when `results/tables/xai_audit_raw.json` is missing | Weeks 10–12 after d1–d4 modules run |
-| `paper/main.tex` | `% TBD` placeholders in Abstract, Table II, Sections VII/VIII | After experiments |
+| `paper/main.tex` | Sections VII/VIII still have `% TBD` placeholders pending XAI results | After C3 modules run |
 | `paper/references.bib` | Two `% TODO` stubs: `bates2021ml_ltc` and `dellefield2015staffing` | Any time now — entries identified in notebook 01 |
-| `src/xai/shap_pipeline.py` | Does not exist yet | Week 10 |
-| `src/xai/d1_fidelity.py` through `d4_plausibility.py` | Do not exist yet | Weeks 10–12 |
-| `src/evaluation/metrics.py` and `figures.py` | Exist — metrics.py has AUC aggregation + Mann-Whitney; figures.py generates Figs 3 + 4 | Done (Week 2) |
+| `src/xai/shap_pipeline.py` | Does not exist yet | Week 3 |
+| `src/xai/d1_fidelity.py` through `d4_plausibility.py` | Do not exist yet | Weeks 3–4 |
 | `src/dp/opacus_wrapper.py` | Does not exist yet | Week 9 |
-| `data/mimic_iv/` | Empty — PhysioNet credentialed access pending | Week 3 |
 
 ---
 
 ## Common Commands
 
-All commands assume the venv is active (`.venv\Scripts\Activate.ps1`).
+All commands assume the venv is active (`venv\Scripts\Activate.ps1`).
 
 ```powershell
 # Verify environment
@@ -166,7 +163,7 @@ python -m src.fl.simulation --strategy fedprox --mu 0.1 --rounds 50
 python -m src.fl.simulation --strategy clustered --rounds 50
 
 # Run all 5 strategies sequentially
-python -m src.fl.simulation --all
+python -m src.fl.simulation --strategy all
 
 # DP epsilon sweep (requires synthetic data)
 python -m src.dp.epsilon_sweep
@@ -196,7 +193,7 @@ Running out of order will fail with `FileNotFoundError`. Correct order:
 ```
 1. python -m src.data.generator        → produces data/synthetic/*.csv + all_facilities.parquet
 2. python -m src.data.fidelity         → produces results/tables/fidelity_*.{csv,json} + Fig 2
-3. python -m src.fl.simulation --all   → produces results/logs/results_*.{json,csv}
+3. python -m src.fl.simulation --strategy all   → produces results/logs/results_*.{json,csv}
 4. python -m src.dp.epsilon_sweep      → produces results/tables/dp_epsilon_sweep.csv + Fig 5
 5. [implement d1–d4 XAI modules]       → produces results/tables/xai_audit_raw.json
 6. python -m src.xai.scorecard         → produces results/tables/xai_audit_scorecard.* + Fig 6
@@ -289,24 +286,32 @@ D4 literature features: `adl_mobility`, `adl_cognition`, `medication_count`, `fa
 
 ---
 
-## Current Status Snapshot (as of Session 6 — 7 Jun 2026)
+## Current Status Snapshot (as of Session 7 — 17 Jun 2026)
 
-**MidSEM COMPLETE** (commit 382c123, pushed to main). Bug Fix Sprint complete — all 15/15 `/validate-research` checks pass.
+**MidSEM COMPLETE.** Bug Fix Sprint complete. Post-midsem hardening sprint (Session 7) complete:
+- `HELD_OUT_FACILITIES` extended to `[6, 9]` — one SNF + one IL for clinically substantive generalisation test
+- Dead code (`clustered_fl.py`) removed; production aggregation is `simulation.py:_aggregate_xgb()`
+- MIMIC-IV access granted; `mimic_analysis.py` + `mimic_preprocessor.py` committed; Fig 2 uses real MIMIC-IV
+- All figures regenerated; `paper/main.tex` updated with new numbers
 
-**Canonical numbers (locked — in all deliverables):**
-- CFL (held-out): AUC 0.9677, F1 0.7033 | FedAvg: AUC 0.9057, F1 0.5325 | Gap: 6.2pt | U=364, p=0.0039
-- Centralised oracle: AUC 0.9751 | IL Local baseline (facility 7): AUC 0.9677 (structurally equal to CFL — 1 IL training client)
-- Fidelity: Frobenius 0.2196 vs baseline 5.9407 (27x), TSTR gap 0.0199
-- DP: ε=10 recommended (15.7% degradation from no-DP 0.9829 → 0.8288)
+**Canonical numbers (held-out facilities 6 (SNF) + 9 (IL), 50 rounds):**
+- CFL: AUC 0.9827, F1 0.8408 | per care type — SNF: 0.9917 | IL: 0.9693
+- FedAvg: AUC 0.9685, F1 0.8539 | per care type — SNF: 0.9881 | IL: 0.9428
+- CFL vs FedAvg gap: +1.42pt overall (+0.36pt SNF, +2.65pt IL) | Mann-Whitney U=400, p<0.001
+- Centralised oracle: AUC 0.9824, F1 0.8555
+- IL Local (fac 7): AUC 0.9643, F1 0.6522 | SNF Local (fac 3): AUC 0.9823, F1 0.8621
+- Fidelity C2: MIMIC-IV cohort calibration — 27.2% post-acute discharge ≈ 28% SNF mismatch target (within 0.8%)
+- DP: ε=10 recommended (15.7% degradation, no-DP 0.9829 → 0.8288)
+
+**Training set: 8 facilities (IDs 0–5, 7–8) | Held-out: facility 6 (SNF) + facility 9 (IL)**
 
 **What exists now:**
 - All 5 FL strategies run 50 rounds, results in `results/logs/` and `results/tables/`
-- `src/evaluation/metrics.py`, `src/evaluation/figures.py`, `src/evaluation/eval_held_out.py` — all created and run
-- Figs 2–5 generated in `results/figures/` (PNG + PDF)
-- `reports/FedAcuity_MidSEM_Report.docx` — all tables + narrative correct
-- `reports/FedAcuity_MidSEM_Slides.pptx` — slides 11 (DP) + 16 (summary) correct
-- `paper/main.tex` — drafted with most correct numbers; **stale in**: Abstract (ε=5→ε=10), Fig 2/4/5 captions, Section V DP text (deferred to Week 5)
+- `src/evaluation/metrics.py`, `src/evaluation/figures.py`, `src/evaluation/eval_held_out.py`
+- `src/data/mimic_analysis.py`, `src/data/mimic_preprocessor.py` — MIMIC-IV cohort calibration
+- Figs 2–5 regenerated in `results/figures/` (PNG + PDF) with current numbers
+- `paper/main.tex` — updated with all SNF held-out numbers, MIMIC-IV calibration, ε=10
 
-**Immediate next task (Week 3, starting 14 Jun 2026):**
+**Immediate next task (Week 3, starting 17 Jun 2026):**
 - Create `src/xai/shap_pipeline.py` — SHAP TreeExplainer on all 5 trained XGBoost models
 - See PLAN.md Week 3 for full task breakdown

@@ -254,10 +254,12 @@ to the reference distribution.
 \begin{figure}[!t]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig2_fidelity_distributions.pdf}
-\caption{KS-test distribution comparisons across key clinical features between
-synthetic LTC data and MIMIC-IV proxy (20\% held-out). All 14 features pass
-$\alpha = 0.05$; Frobenius norm of correlation matrix difference is 0.2436
-vs.\ random baseline 4.3365.}
+\caption{(A) KS-test distribution comparisons for 3 MIMIC-IV-mappable features
+(medication\_count, rug\_category, resident\_census) between synthetic LTC data
+and real MIMIC-IV elderly subset (205K patients). Expected domain gap confirmed
+(Frobenius 0.823 vs.\ random baseline 0.746; distributions differ as LTC $\neq$ hospital).
+(B) Within-MIMIC-IV cohort calibration: LTC-bound discharge cohort (27.2\%) closely
+mirrors synthetic SNF mismatch target (28\%), within 0.8\%.}
 \label{fig:fidelity}
 \end{figure}
 

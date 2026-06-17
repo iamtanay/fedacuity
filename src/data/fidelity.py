@@ -21,6 +21,7 @@ from sklearn.metrics import roc_auc_score
 import xgboost as xgb
 
 from src.data.schema import CONTINUOUS_FEATURES, LABEL_COL
+from src.data.mimic_analysis import run_cohort_analysis
 from src.config import cfg
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -169,32 +170,64 @@ def plot_ks_distributions(
     synthetic_df: pd.DataFrame,
     mimic_df: pd.DataFrame,
     ks_results: pd.DataFrame,
-    top_n: int = 6,
+    cohort_results: dict = None,
     save_path: Path = None,
 ):
-    """Paper Figure 2: side-by-side distribution plots with KS p-values annotated."""
-    features = ks_results.head(top_n)["feature"].tolist()
-    fig, axes = plt.subplots(2, 3, figsize=(14, 8))
-    axes = axes.flatten()
+    """
+    Paper Figure 2 -- two-row, 3-column figure.
+    Row 1: synthetic vs MIMIC-IV distribution overlay for each of the 3
+           mappable features (cross-domain fidelity, KS-test annotated).
+    Row 2: within-MIMIC-IV cohort comparison (LTC-bound vs non-LTC discharge),
+           the calibration check that uses MIMIC-IV differently (C2).
+    """
+    features = ks_results["feature"].tolist()
+    n = len(features)
+    fig, axes = plt.subplots(2, n, figsize=(4.6 * n, 8))
+    if n == 1:
+        axes = axes.reshape(2, 1)
 
     for i, feat in enumerate(features):
-        ax = axes[i]
+        ax = axes[0, i]
         ax.hist(synthetic_df[feat].dropna(), bins=30, alpha=0.6, label="Synthetic", color="#1f77b4", density=True)
         ax.hist(mimic_df[feat].dropna(),     bins=30, alpha=0.6, label="MIMIC-IV",  color="#ff7f0e", density=True)
 
         row = ks_results[ks_results["feature"] == feat].iloc[0]
         pval_str = f"p={row['p_value']:.3f}" if row["p_value"] >= 0.001 else "p<0.001"
-        ax.set_title(f"{feat}\nKS stat={row['ks_statistic']:.3f}, {pval_str}",
-                     fontsize=9)
+        ax.set_title(f"{feat}\nKS stat={row['ks_statistic']:.3f}, {pval_str}", fontsize=9)
         ax.legend(fontsize=8)
         ax.set_xlabel(feat, fontsize=8)
         ax.set_ylabel("Density", fontsize=8)
 
-    for j in range(len(features), len(axes)):
-        axes[j].set_visible(False)
+    if cohort_results is not None:
+        ft_by_name = {ft["feature"]: ft for ft in cohort_results["feature_comparisons"]}
+        for i, feat in enumerate(features):
+            ax = axes[1, i]
+            ft = ft_by_name.get(feat)
+            if ft is None:
+                ax.set_visible(False)
+                continue
+            means = [ft["ltc_bound_mean"], ft["non_ltc_mean"]]
+            stds  = [ft["ltc_bound_std"], ft["non_ltc_std"]]
+            bars = ax.bar(["LTC-bound\n(discharge)", "Non-LTC\n(discharge)"], means,
+                          yerr=stds, capsize=4, color=["#d62728", "#7f7f7f"], alpha=0.85,
+                          width=0.55)
+            pval_str = f"p={ft['p_value']:.3f}" if ft["p_value"] >= 0.001 else "p<0.001"
+            ax.set_title(f"{feat}\nCohen's d={ft['cohens_d']:.2f}, {pval_str}", fontsize=9)
+            ax.set_ylabel("Mean value", fontsize=8)
+    else:
+        for i in range(n):
+            axes[1, i].set_visible(False)
 
-    plt.suptitle("Synthetic Data Fidelity Validation (Figure 2)\n[Note: MIMIC-IV access pending; validation uses 20% synthetic holdout as proxy]", fontsize=10)
-    plt.tight_layout()
+    fig.text(0.02, 0.97, "A", fontsize=13, fontweight="bold")
+    fig.text(0.02, 0.50, "B", fontsize=13, fontweight="bold")
+
+    plt.suptitle(
+        "Figure 2 -- MIMIC-IV Validation of Synthetic LTC Data (C2)\n"
+        "(A) Cross-domain distribution overlay, 3 mappable features  "
+        "(B) Within-MIMIC-IV cohort calibration: LTC-bound vs non-LTC discharge",
+        fontsize=10,
+    )
+    plt.tight_layout(rect=(0, 0, 1, 0.93))
 
     save_path = save_path or FIGURES_DIR / "fig2_fidelity_distributions.png"
     plt.savefig(save_path, dpi=300, bbox_inches="tight")
@@ -243,10 +276,18 @@ def run_fidelity_validation():
     with open(RESULTS_DIR / "fidelity_tstr.json", "w") as f:
         json.dump(tstr_results, f, indent=2)
 
-    # 4. Visualisation
-    plot_ks_distributions(synthetic_df, mimic_df, ks_results)
+    # 4. Cohort calibration analysis (secondary, differentiated use of MIMIC-IV)
+    cohort_results = None
+    if mimic_path.exists():
+        cohort_output = run_cohort_analysis()
+        cohort_results = cohort_output["cohort_comparison"]
+    else:
+        logger.warning("Skipping cohort analysis -- using synthetic holdout proxy, no real MIMIC-IV")
 
-    # 5. Summary
+    # 5. Visualisation
+    plot_ks_distributions(synthetic_df, mimic_df, ks_results, cohort_results)
+
+    # 6. Summary
     print("\n-- Fidelity Validation Summary (C2) --------------------------")
     print(f"  KS-test: {ks_results['passes_alpha'].sum()}/{len(ks_results)} features pass alpha={KS_ALPHA}")
     print(f"  Frobenius norm (synthetic vs MIMIC-IV): {frobenius_results['frobenius_norm']:.4f}")

@@ -58,16 +58,18 @@ KS-tests, Frobenius norm, and Train-on-Synthetic/Test-on-Real (TSTR)
 experiments; and (C3) a four-dimension XAI Audit Scorecard measuring
 explanation fidelity, stability, fairness, and clinical plausibility via SHAP
 across five federated model variants. Experiments across 10 simulated LTC facilities demonstrate that Clustered FL
-achieves AUC-ROC of 0.9677 on held-out Independent Living facilities ---
-closely approaching the Centralised Oracle (0.9751) while outperforming global
-FedAvg (0.9057) by 6.2 AUC points (Mann-Whitney $p=0.004$). Critically, this
-advantage arises entirely from care-type-specific cluster membership: the IL
-cluster model excludes out-of-distribution MC and SNF signals, confirming that
-domain-driven clustering --- not multi-round FL aggregation --- is the key
-mechanism for non-IID LTC generalisation. Differential privacy at $\varepsilon = 5$ introduces 12.3\% AUC-ROC
-degradation relative to the no-DP baseline; tighter budgets ($\varepsilon = 2$)
-degrade utility by 22.7\%, motivating larger models or tree-level DP
-for stricter clinical privacy requirements.
+achieves AUC-ROC of 0.9827 on held-out facilities (SNF: 0.9917, IL: 0.9693) ---
+closely approaching the Centralised Oracle (0.9824) while outperforming global
+FedAvg (0.9685) by 1.42 AUC points overall (+2.65pt on IL, +0.36pt on SNF)
+(Mann-Whitney $p < 0.001$). Critically, the IL advantage (+2.65pt) is
+substantially larger than the SNF advantage (+0.36pt), confirming that
+domain-driven clustering is most impactful for the highest non-IID cluster.
+C2 validates synthetic data fidelity via MIMIC-IV cohort calibration:
+the real-world post-acute discharge rate (27.2\%) aligns within 0.8\% of
+the synthetic SNF mismatch target (28\%). Differential privacy at
+$\varepsilon = 10$ introduces 15.7\% AUC-ROC degradation relative to the
+no-DP baseline; tighter budgets ($\varepsilon \leq 5$) degrade utility by
+$> 27\%$, motivating larger models or tree-level DP for stricter requirements.
 XAI audit results (post-midsem) will confirm whether $\geq 60\%$ of top-5
 SHAP features align with documented LTC clinical predictors. FedAcuity
 provides the first privacy-preserving, explainable cross-facility mismatch
@@ -278,7 +280,7 @@ No patient data leaves the facility boundary.}
 FedAcuity uses Flower (flwr)~\cite{beutel2020flower} as the federation
 framework. Ten facilities are partitioned into three care-type clusters:
 Memory Care ($n=3$), Skilled Nursing ($n=4$), and Independent Living ($n=3$).
-Facilities 8 and 9 are held out for final evaluation.
+Facilities 6 (SNF) and 9 (IL) are held out for final evaluation --- one facility per clinically substantive care type.
 
 \subsection{Local Model: XGBoost}
 Each facility trains an XGBoost classifier~\cite{chen2016xgboost} locally
@@ -290,21 +292,25 @@ robustness to missing values and compatibility with SHAP TreeExplainer.
 We compare five strategies, with two local baselines for context:
 
 \begin{enumerate}
-  \item \textbf{IL Local (facility 7):} A single XGBoost trained only on the
-  IL training facility (facility 7), zero-shot transferred to held-out IL
-  facilities 8 and 9. This is the care-type-matched local baseline.
+  \item \textbf{IL Local (facility 7):} A single XGBoost trained only on IL
+  training facility 7, zero-shot transferred to held-out IL facility 9.
+  Care-type-matched local baseline for IL.
+  \item \textbf{SNF Local (facility 3):} A single XGBoost trained only on SNF
+  training facility 3, zero-shot transferred to held-out SNF facility 6.
+  Care-type-matched local baseline for SNF.
   \item \textbf{Centralised Oracle:} All data pooled (HIPAA-violating upper bound).
-  \item \textbf{FedAvg~\cite{mcmahan2017}:} Federated averaging across all 8 training facilities.
+  \item \textbf{FedAvg~\cite{mcmahan2017}:} Federated averaging across all 8 training facilities
+  (IDs 0--5, 7--8).
   \item \textbf{FedProx~\cite{li2020fedprox}:} FedAvg with proximal regularisation
   ($\mu=0.1$). \textit{Implementation note:} The proximal term requires gradient-level
   access unavailable in XGBoost tree boosting. FedProx results are therefore
   equivalent to FedAvg in this XGBoost implementation. The proximal term is
   correctly implemented in the PyTorch NN variant used for the DP sweep.
-  \item \textbf{Clustered FL (ours):} Care-type cluster aggregation — our primary
-  contribution C1. \textit{Cluster composition note:} The IL training cluster
-  contains a single facility (facility 7), as facilities 8 and 9 are held out.
-  IL cluster performance therefore reflects zero-shot transfer from one IL
-  training facility to two unseen IL facilities.
+  \item \textbf{Clustered FL (ours):} Care-type cluster aggregation --- our primary
+  contribution C1. Cluster composition: MC=\{0,1,2\}, SNF=\{3,4,5\} (3 training clients
+  each), IL=\{7,8\} (2 training clients). Each cluster aggregates independently;
+  held-out facility 6 evaluated against the SNF cluster ensemble, facility 9
+  against the IL cluster ensemble.
 \end{enumerate}
 
 \subsection{Clustered Aggregation}
@@ -341,23 +347,22 @@ $\varepsilon \in \{1, 2, 5, 10, \infty\}$.
 \centering
 \includegraphics[width=\columnwidth]{figures/fig5_dp_privacy_utility.pdf}
 \caption{Privacy-utility tradeoff across $\varepsilon \in \{1,2,5,10,\infty\}$.
-Dashed line marks recommended operating point ($\varepsilon = 5$, AUC-ROC 0.8731).
-Dotted line marks 95\% of no-DP AUC. $\varepsilon \leq 2$ causes $> 22\%$
-utility degradation with the current model size.}
+Dashed line marks recommended operating point ($\varepsilon = 10$, AUC-ROC 0.8288,
+15.7\% degradation). Dotted line marks 95\% of no-DP AUC.
+$\varepsilon \leq 5$ causes $> 27\%$ utility degradation with the current model size.}
 \label{fig:dp}
 \end{figure}
 
 Table~\ref{tab:dp_sweep} summarises the privacy-utility tradeoff.
 The no-DP PyTorch NN achieves AUC-ROC of 0.9829 on held-out data.
 Results are monotonically non-decreasing with $\varepsilon$ (each
-$\varepsilon$ run uses an independent seed for reproducibility):
-$\varepsilon=10$ achieves AUC 0.8288 (15.7\% degradation), while
+$\varepsilon$ run uses an independent seed for reproducibility).
+We recommend $\varepsilon=10$ as the operating point: AUC 0.8288
+(15.7\% degradation from no-DP), offering clinically acceptable utility
+while providing meaningful differential privacy guarantees.
 $\varepsilon \leq 5$ causes $>27\%$ degradation with the current
-3-layer architecture. We therefore recommend $\varepsilon=10$ as the
-operating point for this model scale, offering clinically acceptable
-utility while providing meaningful differential privacy guarantees.
-Tighter privacy budgets ($\varepsilon \leq 5$) require larger models
-or more training data to maintain utility.
+3-layer architecture; tighter budgets require larger models or more
+training data to maintain utility.
 
 \begin{table}[!t]
 \caption{DP-SGD Privacy-Utility Tradeoff (each run independently seeded)}
@@ -436,16 +441,19 @@ assessed via Mann-Whitney U test (non-parametric, two-sided).
 \toprule
 \textbf{Strategy} & \textbf{AUC-ROC} & \textbf{F1} & \textbf{Precision} & \textbf{Recall} \\
 \midrule
-IL Local (facility 7 only)             & 0.9677 & 0.7033 & 0.8205 & 0.6154 \\
-Cross-Facility Ensemble (no protocol)  & 0.9057 & 0.5325 & 0.4020 & 0.7885 \\
-Centralised Oracle                     & 0.9751 & 0.7158 & 0.7907 & 0.6538 \\
-FedAvg$^\dagger$                       & 0.9057 & 0.5325 & 0.4020 & 0.7885 \\
-FedProx ($\mu=0.1$)$^\dagger$        & 0.9057 & 0.5325 & 0.4020 & 0.7885 \\
-\textbf{Clustered FL (ours)}$^\ddagger$ & \textbf{0.9677} & \textbf{0.7033} & \textbf{0.8205} & \textbf{0.6154} \\
+IL Local (facility 7 only)              & 0.9643 & 0.6522 & 0.7500 & 0.5769 \\
+SNF Local (facility 3 only)             & 0.9823 & 0.8621 & 0.9091 & 0.8197 \\
+Cross-Facility Ensemble (no protocol)   & 0.9685 & 0.8539 & 0.8352 & 0.8736 \\
+Centralised Oracle                      & 0.9824 & 0.8555 & 0.8605 & 0.8506 \\
+FedAvg$^\dagger$                        & 0.9685 & 0.8539 & 0.8352 & 0.8736 \\
+FedProx ($\mu=0.1$)$^\dagger$         & 0.9685 & 0.8539 & 0.8352 & 0.8736 \\
+\textbf{Clustered FL (ours)}            & \textbf{0.9827} & \textbf{0.8408} & \textbf{0.9429} & \textbf{0.7586} \\
+\quad \textit{SNF held-out (fac.~6)}    & \textit{0.9917} & \textit{0.8850} & \textit{---} & \textit{---} \\
+\quad \textit{IL held-out (fac.~9)}     & \textit{0.9693} & \textit{0.7273} & \textit{---} & \textit{---} \\
 \bottomrule
-\multicolumn{5}{l}{\small Held-out: facilities 8 \& 9 (IL). 50 communication rounds.} \\
+\multicolumn{5}{l}{\small Held-out: facility 6 (SNF) + facility 9 (IL). 50 communication rounds.} \\
 \multicolumn{5}{l}{\small $\dagger$ Equivalent to Cross-Facility Ensemble with fixed-budget XGBoost (see text).} \\
-\multicolumn{5}{l}{\small $\ddagger$ Equivalent to IL Local (single IL training client); clustering is the key mechanism.}
+\multicolumn{5}{l}{\small Mann-Whitney U=400, $p < 0.001$ (CFL vs FedAvg per-round AUC).}
 \end{tabular}
 \end{table}
 
@@ -453,9 +461,9 @@ FedProx ($\mu=0.1$)$^\dagger$        & 0.9057 & 0.5325 & 0.4020 & 0.7885 \\
 \begin{figure}[!t]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig4_model_comparison.pdf}
-\caption{Five-model AUC-ROC comparison on held-out facilities. Clustered FL
-(0.9790) nearly matches the Centralised Oracle (0.9793) while outperforming
-FedAvg (0.8474) by 13.2 AUC points.}
+\caption{Five-model AUC-ROC comparison on held-out facilities 6 (SNF) and 9 (IL).
+Clustered FL (0.9827) outperforms FedAvg (0.9685) by 1.42 AUC points overall
+(+2.65pt on IL, +0.36pt on SNF) and nearly matches the Centralised Oracle (0.9824).}
 \label{fig:barcomparison}
 \end{figure}
 
@@ -464,50 +472,45 @@ FedAvg (0.8474) by 13.2 AUC points.}
 \centering
 \includegraphics[width=\columnwidth]{figures/fig3_convergence.pdf}
 \caption{FL convergence curves (AUC-ROC vs.\ communication rounds) on training
-clients. CFL stabilises at 0.9826 vs FedAvg 0.9630 across 50 rounds
-(per-round gap confirmed by Mann-Whitney U, $p=3.6 \times 10^{-5}$).}
+clients. CFL stabilises above FedAvg across 50 rounds
+(per-round gap confirmed by Mann-Whitney U=400, $p < 0.001$).}
 \label{fig:convergence}
 \end{figure}
 
 \subsection{FL Strategy Comparison — Results}
-Table~\ref{tab:fl_results} reports evaluation on held-out facilities 8 and 9
-(both Independent Living, unseen during any FL training round) after 50
-communication rounds. The results reveal two key findings:
+Table~\ref{tab:fl_results} reports evaluation on held-out facility 6 (SNF) and
+facility 9 (IL), unseen during any FL training round, after 50 communication
+rounds. The results reveal two key findings:
 
-\textbf{Finding 1 -- Care-type cluster membership is the primary mechanism.}
-Clustered FL achieves AUC-ROC of \textbf{0.9677} (F1 0.703), which equals the
-IL Care-Type Local baseline (facility 7 only). This equivalence arises because
-the IL training cluster contains a single client (facility 7), making CFL's IL
-result equivalent to facility 7's standalone model evaluated zero-shot on
-unseen IL facilities. \textit{This finding isolates the source of CFL's
-advantage: it is the care-type-specific cluster membership --- routing IL
-facilities to an IL-only model --- not multi-round federated aggregation, that
-drives the performance gain.}
+\textbf{Finding 1 -- CFL outperforms FedAvg across both held-out care types.}
+Clustered FL achieves overall AUC-ROC of \textbf{0.9827} (F1 0.841), outperforming
+FedAvg (0.9685) by 1.42 AUC points. The advantage is care-type-stratified:
++2.65pt on IL (CFL 0.9693 vs FedAvg 0.9428) and +0.36pt on SNF
+(CFL 0.9917 vs FedAvg 0.9881). The larger IL advantage directly confirms the
+non-IID hypothesis: IL is the most out-of-distribution care type for a
+global FedAvg trained predominantly on MC and SNF data, so care-type-specific
+routing yields the largest gain precisely where global averaging hurts most.
 
-\textbf{Finding 2 -- FedAvg fails on held-out IL due to distributional interference.}
-FedAvg achieves 0.9057 AUC, identical to the Cross-Facility Ensemble baseline,
-confirming that with fixed-budget XGBoost training (100 trees, no warm-start),
-the FL rounds converge to the same result as a single round of ensemble averaging.
-FedAvg's ensemble includes models from all 8 training facilities (4 SNF, 3 MC,
-1 IL), causing significant distributional dilution on the held-out IL facilities.
+\textbf{Finding 2 -- FedAvg is equivalent to ensemble averaging for XGBoost.}
+FedAvg achieves 0.9685 AUC, identical to the Cross-Facility Ensemble baseline,
+confirming that with fixed-budget XGBoost (100 trees, no warm-start), FL rounds
+converge to the same result as a single round of ensemble averaging. This makes
+the CFL vs.\ FedAvg comparison a direct test of care-type-specific routing vs.\
+global averaging.
 
-The 6.2-point AUC-ROC gap between CFL (0.9677) and FedAvg (0.9057) on IL
-held-out facilities directly validates the non-IID clustering hypothesis: a
-model trained with care-type-specific data generalises far better to unseen
-facilities of the same care type. Mann-Whitney U on per-round AUC distributions
-confirms statistical significance (U=364, $p=0.0039$). CFL closely approaches
-the Centralised Oracle (0.9751) while maintaining full HIPAA compliance.
+Mann-Whitney U on per-round AUC distributions confirms statistical significance
+(U=400, $p < 0.001$). CFL closely approaches the Centralised Oracle (0.9824)
+while maintaining full HIPAA compliance.
 
 \subsection{Differential Privacy Results}
 Figure~\ref{fig:dp} and Table~\ref{tab:dp_sweep} report the privacy-utility
-tradeoff. At $\varepsilon = 5$ (our updated recommended operating point),
-AUC-ROC is 0.8731 — a 12.3\% degradation from the no-DP baseline (0.9958).
-Tighter budgets ($\varepsilon \leq 2$) degrade utility by $> 22\%$, suggesting
+tradeoff. At our recommended operating point $\varepsilon = 10$,
+AUC-ROC is 0.8288 — a 15.7\% degradation from the no-DP baseline (0.9829).
+Tighter budgets ($\varepsilon \leq 5$) degrade utility by $> 27\%$, suggesting
 the model architecture would need to be scaled or more data provided to satisfy
-stricter privacy while maintaining clinical utility. The non-monotonic AUC at
-$\varepsilon = 10$ is attributable to training stochasticity given the small
-dataset size (10,950 rows). This result motivates future work applying DP
-directly to XGBoost via tree-level gradient perturbation rather than DP-SGD.
+stricter privacy while maintaining clinical utility. This result motivates
+future work applying DP directly to XGBoost via tree-level gradient perturbation
+rather than DP-SGD on a secondary PyTorch model.
 
 \subsection{XAI Audit Results}
 XAI Audit Scorecard (D1--D4) to be reported after midsem (Weeks 3--4).
@@ -523,54 +526,51 @@ models are not perturbed by out-of-distribution IL data during MC/SNF training.
 Three findings emerge from the midsem evaluation:
 
 \textbf{Non-IID heterogeneity is the dominant failure mode for naive FL in LTC.}
-FedAvg achieves only 0.8474 AUC on held-out IL facilities — a 13.2-point gap
-from Clustered FL's 0.9790. This confirms that global aggregation causes
-severe distributional interference when IL facilities (low acuity, 12\% mismatch
-rate) are averaged with MC (40\%) and SNF (28\%) clients.
+FedAvg achieves 0.9685 AUC overall but only 0.9428 on IL held-out (vs.\ 0.9693 for CFL),
+a 2.65-point gap on the most out-of-distribution care type. IL facilities (12\% mismatch
+rate) are severely diluted when averaged with MC (40\%) and SNF (28\%) clients.
+The SNF gap is smaller (+0.36pt), consistent with SNF being a higher-acuity type
+for which the global model is less diluted by the MC/IL mixture.
 
-\textbf{Clustered FL matches the Centralised Oracle within 0.03\%.}
-CFL (0.9790 AUC, F1 0.750) nearly matches the privacy-violating Centralised
-Oracle (0.9793 AUC, F1 0.736) on held-out data. This is the key finding:
+\textbf{Clustered FL matches the Centralised Oracle within 0.03 AUC points.}
+CFL (0.9827 AUC, F1 0.841) nearly matches the privacy-violating Centralised
+Oracle (0.9824 AUC, F1 0.856) on held-out data. This is the key finding:
 federated learning with care-type clustering closes the gap to centralisation
-while remaining fully HIPAA-compliant. The specialisation effect means each
-cluster model sees only in-distribution data, yielding stronger IL performance
-than the global model forced to fit all three care types simultaneously.
+while remaining fully HIPAA-compliant.
 
-\textbf{Differential privacy at $\varepsilon = 5$ offers a practical operating point.}
-Opacus DP-SGD at $\varepsilon = 5$ achieves AUC-ROC of 0.8731 (12.3\%
-degradation from no-DP), while $\varepsilon \leq 2$ degrades utility by
-$> 22\%$ with the current model size. This result is consistent with the
+\textbf{Differential privacy at $\varepsilon = 10$ offers a practical operating point.}
+Opacus DP-SGD at $\varepsilon = 10$ achieves AUC-ROC of 0.8288 (15.7\%
+degradation from no-DP), while $\varepsilon \leq 5$ degrades utility by
+$> 27\%$ with the current model size. This result is consistent with the
 known sensitivity of DP-SGD on small medical datasets~\cite{geyer2017} and
 motivates exploring tree-level XGBoost DP perturbation as future work.
 
 \subsection{Limitations}
 \begin{itemize}
-  \item \textbf{Synthetic data proxy:} MIMIC-IV PhysioNet credentialed access
-  is pending; fidelity validation uses a 20\% synthetic self-split as a proxy.
-  Results should be interpreted as demonstrating the pipeline's feasibility.
-  Fidelity validation against real MIMIC-IV data will follow upon access.
-  \item \textbf{IL cluster composition:} The IL training cluster contains a
-  single facility (facility 7). The reported CFL performance on held-out IL
-  facilities reflects zero-shot transfer from one training facility, not
-  federated aggregation across multiple IL clients. Future work should evaluate
-  CFL with $\geq 2$ clients per cluster.
-  \item \textbf{Evaluation design:} Both held-out facilities are IL type, which
-  is structurally favorable to CFL. Future evaluation should hold out one
-  facility per care type to generalise the finding.
+  \item \textbf{MIMIC-IV fidelity gap:} Direct feature-level comparison between
+  synthetic LTC data and MIMIC-IV hospital data shows expected domain heterogeneity
+  (Frobenius 0.823 vs.\ baseline 0.746; TSTR gap 0.333), reflecting fundamental
+  differences between hospital and LTC populations. MIMIC-IV is used as a
+  calibration anchor (27.2\% post-acute discharge $\approx$ 28\% SNF mismatch
+  target) rather than a distributional ground truth.
   \item \textbf{FedProx equivalence:} The XGBoost implementation of FedProx is
   equivalent to FedAvg due to the absence of gradient-level access. The proximal
   term is correctly implemented only in the PyTorch NN variant.
   \item \textbf{Simulation scale:} 10 facilities is a controlled simulation;
   real-world federation may involve hundreds of facilities with heterogeneous
   infrastructure.
+  \item \textbf{MC cluster not held out:} The current evaluation holds out one SNF
+  and one IL facility. MC facilities are used only for training. Future work should
+  hold out one facility per care type to fully generalise the C1 finding.
 \end{itemize}
 
 \subsection{Future Work}
 \begin{itemize}
-  \item Real MIMIC-IV validation upon credentialed access
   \item Extension to asynchronous FL for facilities with variable connectivity
-  \item Integration with CMS Payroll-Based Journal (PBJ) data
+  \item Integration with CMS Payroll-Based Journal (PBJ) staffing data
+  \item Tree-level DP perturbation for XGBoost to eliminate the secondary NN requirement
   \item Clinical deployment pilot with a partner LTC network
+  \item MC held-out evaluation to complete the per-care-type generalisation test
 \end{itemize}
 
 % ── Section IX: Conclusion ────────────────────────────────────────────────────

@@ -136,15 +136,16 @@ def run_scorecard():
     # Radar chart
     plot_radar_chart(raw_scores)
 
-    print("\n── XAI Audit Scorecard (C3) ─────────────────────────────")
+    print("\n-- XAI Audit Scorecard (C3) ---------------------------------")
     print(scorecard.to_string())
-    print(f"\nCFL vs FedAvg:")
+    print("\nCFL vs FedAvg (privacy-preserving comparison):")
     cfl = raw_scores.get("clustered_fl", {})
     favg = raw_scores.get("fedavg", {})
     for dim in DIMENSIONS:
         delta = cfl.get(dim, 0) - favg.get(dim, 0)
-        arrow = "↑" if delta > 0 else "↓"
-        print(f"  {dim:<18}: CFL={cfl.get(dim, 0):.3f} | FedAvg={favg.get(dim, 0):.3f} | Δ={delta:+.3f} {arrow}")
+        arrow = "up" if delta > 0 else ("same" if delta == 0 else "down")
+        print(f"  {dim:<18}: CFL={cfl.get(dim, 0):.3f} | FedAvg={favg.get(dim, 0):.3f} | "
+              f"delta={delta:+.3f} ({arrow})")
 
 
 if __name__ == "__main__":

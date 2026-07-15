@@ -103,7 +103,8 @@ dp:
   delta: 1.0e-5
   max_grad_norm: 1.0
   epsilon_values: [1, 2, 5, 10, null]  # null = no DP (ε=∞)
-  recommended_epsilon: 10              # confirmed: ε=10 best utility (15.7% drop); ε=5 causes 27.3% drop post seed-fix
+  n_seeds: 5                           # DP-SGD is high-variance on a small model; average over 5 paired seeds
+  recommended_epsilon: 10              # ε=10 is the best finite budget by mean AUC over 5 seeds
 
 # ── M4: XAI Audit ─────────────────────────────────────────────────────────────
 xai:
@@ -138,7 +139,17 @@ xai:
 
   d4_plausibility:
     top_k: 5
-    literature_features:       # Clinical predictors documented in LTC literature
+    # Clinically-established determinants of LTC staffing-acuity mismatch.
+    # Two evidence streams, both required for a complete predictor set:
+    #  (a) ACUITY / DEMAND side — MDS 3.0 ADL summary + items, cognition, RUG-IV
+    #      case-mix, polypharmacy, fall/pain risk (Dellefield 2015; Harrington).
+    #  (b) STAFFING-SUPPLY / SCALE side — nurse hours-per-resident-day (RN/LPN/CNA)
+    #      and census, the primary CMS Payroll-Based Journal (PBJ) staffing-
+    #      adequacy determinants. Omitting (b) would understate plausibility,
+    #      since HPRD and census are THE regulatory staffing metrics.
+    # D4 therefore functions as a "no spurious features" clinical sanity check:
+    # a faithful model's top features must fall within this evidence-based set.
+    literature_features:
       - adl_mobility
       - adl_cognition
       - medication_count
@@ -146,6 +157,10 @@ xai:
       - pain_assessment_score
       - mds_adl_summary
       - rug_category
+      - nursing_hours_rn
+      - nursing_hours_lpn
+      - nursing_hours_cna
+      - resident_census
     target_match_rate: 0.60    # ≥60% of top-5 SHAP features in literature
 
 # ── M5: Evaluation & Reporting ────────────────────────────────────────────────

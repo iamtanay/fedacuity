@@ -123,8 +123,8 @@ These are intentional scaffolds to be filled in later phases:
 | `src/xai/scorecard.py:load_xai_results()` | Uses hardcoded placeholder scores when `results/tables/xai_audit_raw.json` is missing | Weeks 10–12 after d1–d4 modules run |
 | `paper/main.tex` | Sections VII/VIII still have `% TBD` placeholders pending XAI results | After C3 modules run |
 | `paper/references.bib` | Two `% TODO` stubs: `bates2021ml_ltc` and `dellefield2015staffing` | Any time now — entries identified in notebook 01 |
-| `src/xai/shap_pipeline.py` | Does not exist yet | Week 3 |
-| `src/xai/d1_fidelity.py` through `d4_plausibility.py` | Do not exist yet | Weeks 3–4 |
+| ~~`src/xai/shap_pipeline.py`~~ | DONE (Session 8) — real SHAP over all 5 deployed models | — |
+| ~~`src/xai/d1_fidelity.py` … `d4_plausibility.py`~~ | DONE (Session 8); `run_xai_audit.py` orchestrates + `scorecard.py` reads real `xai_audit_raw.json` | — |
 | `src/dp/opacus_wrapper.py` | Does not exist yet | Week 9 |
 
 ---
@@ -210,7 +210,7 @@ Running out of order will fail with `FileNotFoundError`. Correct order:
 | Fig 3 — FL Convergence Curves | `src/evaluation/figures.py` | Generated |
 | Fig 4 — Five-Model Bar Chart | `src/evaluation/figures.py` | Generated (uses held-out AUC from fl_held_out_metrics.json) |
 | Fig 5 — Privacy-Utility Tradeoff | `src/dp/epsilon_sweep.py` → `results/figures/fig5_dp_privacy_utility.{png,pdf}` | Generated (ε=10 recommended) |
-| Fig 6 — XAI Radar Chart | `src/xai/scorecard.py` → `results/figures/fig6_xai_radar.{png,pdf}` | Pending (uses placeholders) |
+| Fig 6 — XAI Radar Chart | `src/xai/scorecard.py` → `results/figures/fig6_xai_radar.{png,pdf}` | Generated (REAL SHAP via `run_xai_audit.py`; CFL D3 fairness advantage) |
 
 All figures are saved as both PNG (300 dpi) and PDF for Overleaf.
 
@@ -286,32 +286,30 @@ D4 literature features: `adl_mobility`, `adl_cognition`, `medication_count`, `fa
 
 ---
 
-## Current Status Snapshot (as of Session 7 — 17 Jun 2026)
+## Current Status Snapshot (as of Session 8 — 15 Jul 2026)
 
-**MidSEM COMPLETE.** Bug Fix Sprint complete. Post-midsem hardening sprint (Session 7) complete:
-- `HELD_OUT_FACILITIES` extended to `[6, 9]` — one SNF + one IL for clinically substantive generalisation test
-- Dead code (`clustered_fl.py`) removed; production aggregation is `simulation.py:_aggregate_xgb()`
-- MIMIC-IV access granted; `mimic_analysis.py` + `mimic_preprocessor.py` committed; Fig 2 uses real MIMIC-IV
-- All figures regenerated; `paper/main.tex` updated with new numbers
+**ALL THREE CONTRIBUTIONS COMPLETE.** Session 8 built the entire C3 XAI Audit Scorecard on real SHAP, hardened the paper, and produced final deliverables:
+- **C3 built:** `src/xai/shap_pipeline.py` + `d1_fidelity.py`, `d2_stability.py`, `d3_fairness.py`, `d4_plausibility.py` + `run_xai_audit.py` orchestrator. Real SHAP (no placeholders). Fig 6 radar + `xai_audit_scorecard.{csv,tex}` generated.
+- **DP hardened:** epsilon_sweep rewritten to average over 5 PAIRED seeds (same seed set across ε) → now monotonic with error bars. Canonical changed: no-DP 0.9812, ε=10 → 0.8347 (14.9% drop).
+- **Paper hardened:** `paper/main.tex` — Section VI filled with real D1–D4 + Fig 6 + scorecard table; Section VII XAI results written; stale held-out refs / DP numbers / conclusion / fidelity section all fixed. Compiles clean (7 pages, 0 undefined, 20 refs).
+- **Final deliverables:** `reports/FedAcuity_Final_Slides.pptx` (15 slides) + `reports/FedAcuity_Final_Report.docx` (via `src/presentation/final_slides.py` + `final_report.py`).
+- `/validate-research` 15/15 PASS; 73/73 tests pass.
 
-**Canonical numbers (held-out facilities 6 (SNF) + 9 (IL), 50 rounds):**
-- CFL: AUC 0.9827, F1 0.8408 | per care type — SNF: 0.9917 | IL: 0.9693
-- FedAvg: AUC 0.9685, F1 0.8539 | per care type — SNF: 0.9881 | IL: 0.9428
-- CFL vs FedAvg gap: +1.42pt overall (+0.36pt SNF, +2.65pt IL) | Mann-Whitney U=400, p<0.001
-- Centralised oracle: AUC 0.9824, F1 0.8555
-- IL Local (fac 7): AUC 0.9643, F1 0.6522 | SNF Local (fac 3): AUC 0.9823, F1 0.8621
+**Canonical FL numbers (held-out facilities 6 (SNF) + 9 (IL), 50 rounds):**
+- CFL: AUC 0.9827, F1 0.8408 | SNF: 0.9917 | IL: 0.9693
+- FedAvg: AUC 0.9685, F1 0.8539 | SNF: 0.9881 | IL: 0.9428
+- CFL vs FedAvg: +1.42pt overall (+0.36pt SNF, +2.65pt IL) | Mann-Whitney U=400, p<0.001
+- Centralised oracle: AUC 0.9824, F1 0.8555 | IL Local (fac 7): 0.9643 | SNF Local (fac 3): 0.9823
 - Fidelity C2: MIMIC-IV cohort calibration — 27.2% post-acute discharge ≈ 28% SNF mismatch target (within 0.8%)
-- DP: ε=10 recommended (15.7% degradation, no-DP 0.9829 → 0.8288)
+- DP: ε=10 recommended — no-DP 0.9812 → 0.8347 (14.9% drop, mean over 5 seeds, monotonic)
+
+**Canonical C3 XAI numbers (real SHAP; scorecard normalised [0,1]):**
+- D1 Fidelity (Spearman ρ vs oracle): local 0.85, fedavg 0.85, CFL 0.82 (all ≥0.75 target)
+- D2 Stability (relative index): fedavg 1.00, centralised 0.86, local/CFL 0.78 (global models more stable — honest)
+- D3 Fairness (1 − equalized-odds gap): **CFL 0.82 vs FedAvg 0.61** — headline. FedAvg MC TPR 0.22, IL AUC 0.67; CFL subgroup AUC ≥0.96, TPR 0.92/0.80/0.58. EO gap FedAvg 0.39 → CFL 0.18.
+- D4 Plausibility: all 1.00 (top-5 features all clinically-established; note literature_features expanded to include CMS nurse-HPRD + census)
+- KEY NARRATIVE: CFL wins the decisive fairness axis, matches on fidelity/plausibility, trades a little stability. NOT a "wins everything" story — deliberately honest.
 
 **Training set: 8 facilities (IDs 0–5, 7–8) | Held-out: facility 6 (SNF) + facility 9 (IL)**
 
-**What exists now:**
-- All 5 FL strategies run 50 rounds, results in `results/logs/` and `results/tables/`
-- `src/evaluation/metrics.py`, `src/evaluation/figures.py`, `src/evaluation/eval_held_out.py`
-- `src/data/mimic_analysis.py`, `src/data/mimic_preprocessor.py` — MIMIC-IV cohort calibration
-- Figs 2–5 regenerated in `results/figures/` (PNG + PDF) with current numbers
-- `paper/main.tex` — updated with all SNF held-out numbers, MIMIC-IV calibration, ε=10
-
-**Immediate next task (Week 3, starting 17 Jun 2026):**
-- Create `src/xai/shap_pipeline.py` — SHAP TreeExplainer on all 5 trained XGBoost models
-- See PLAN.md Week 3 for full task breakdown
+**Remaining optional polish:** Fig 1 (architecture) still a draw.io placeholder box in paper; XAI audit explains the deployed consensus model (disclosed as a limitation).

@@ -69,22 +69,28 @@ def train_with_epsilon(
 ) -> dict:
     """Train with Opacus DP at given epsilon (None = no DP, epsilon=inf).
 
-    Seeds are reset before each call so that results are independent of the
-    order in which epsilon values are evaluated. This ensures monotonicity:
-    larger epsilon (less noise) should yield equal or higher AUC.
+    The seed controls weight initialisation AND data-loader shuffling, and is
+    held FIXED across every epsilon within a given repeat (paired design). The
+    only thing that varies across epsilon is the DP noise multiplier, so any AUC
+    difference is attributable to the privacy budget, not to seed luck. DP-SGD on
+    a small model is nonetheless high-variance, so run_epsilon_sweep() averages
+    this over several paired seeds and reports mean +/- std.
     """
-    # Reset all RNG states for full reproducibility per epsilon run
+    # Reset all RNG states for full reproducibility per run
     torch.manual_seed(run_seed)
     np.random.seed(run_seed)
 
     device = torch.device("cpu")
     input_dim = X_train.shape[1]
 
-    # Datasets
+    # Datasets -- seed the shuffling generator so batch order is deterministic
     X_t = torch.tensor(X_train, dtype=torch.float32)
     y_t = torch.tensor(y_train, dtype=torch.float32)
     train_ds = TensorDataset(X_t, y_t)
-    train_loader = DataLoader(train_ds, batch_size=NN_CFG["batch_size"], shuffle=True)
+    loader_gen = torch.Generator()
+    loader_gen.manual_seed(run_seed)
+    train_loader = DataLoader(train_ds, batch_size=NN_CFG["batch_size"],
+                              shuffle=True, generator=loader_gen)
 
     model = StaffingNN(
         input_dim=input_dim,
@@ -164,19 +170,32 @@ def run_epsilon_sweep():
     X_test = X_test_df.values.astype(np.float32)
     y_test = y_test.values.astype(np.float32)
 
-    results = []
     epsilon_values = DP_CFG["epsilon_values"]  # [1, 2, 5, 10, null]
+    n_seeds = DP_CFG.get("n_seeds", 5)
+    seeds = [SEED + k for k in range(n_seeds)]  # SAME seed set for every epsilon (paired)
 
-    for i, eps in enumerate(epsilon_values):
-        # Use a distinct but deterministic seed per epsilon to ensure independence
-        run_seed = SEED + (i + 1) * 100
-        result = train_with_epsilon(X_train, y_train, X_test, y_test,
-                                    epsilon=eps, run_seed=run_seed)
-        results.append(result)
+    results = []
+    for eps in epsilon_values:
+        aucs, actual_eps = [], []
+        for s in seeds:
+            r = train_with_epsilon(X_train, y_train, X_test, y_test,
+                                   epsilon=eps, run_seed=s)
+            aucs.append(r["auc"])
+            if r["actual_epsilon"] is not None:
+                actual_eps.append(r["actual_epsilon"])
+        results.append({
+            "target_epsilon": eps,
+            "actual_epsilon": round(float(np.mean(actual_eps)), 4) if actual_eps else None,
+            "auc": round(float(np.mean(aucs)), 4),
+            "auc_std": round(float(np.std(aucs)), 4),
+            "n_seeds": n_seeds,
+        })
+        label = f"ε={eps}" if eps else "No DP (ε=∞)"
+        logger.info(f"{label}: mean AUC={np.mean(aucs):.4f} ± {np.std(aucs):.4f} (n={n_seeds})")
 
     df = pd.DataFrame(results)
     df.to_csv(RESULTS_DIR / "dp_epsilon_sweep.csv", index=False)
-    logger.info(f"ε-sweep results saved.")
+    logger.info(f"ε-sweep results saved ({n_seeds} paired seeds per ε).")
 
     # Plot Figure 5: Privacy-Utility Tradeoff
     _plot_privacy_utility(df)
@@ -191,8 +210,11 @@ def _plot_privacy_utility(df: pd.DataFrame):
     eps_labels = [str(row["target_epsilon"]) if row["target_epsilon"] else "∞" for _, row in df.iterrows()]
     eps_vals   = [row["target_epsilon"] if row["target_epsilon"] else 12 for _, row in df.iterrows()]
     aucs       = df["auc"].tolist()
+    stds       = df["auc_std"].tolist() if "auc_std" in df.columns else [0] * len(aucs)
 
-    ax.plot(eps_vals, aucs, marker="o", color="#1f77b4", linewidth=2, markersize=8, label="AUC-ROC")
+    n_seeds = int(df["n_seeds"].iloc[0]) if "n_seeds" in df.columns else 1
+    ax.errorbar(eps_vals, aucs, yerr=stds, marker="o", color="#1f77b4", linewidth=2,
+                markersize=8, capsize=4, label=f"AUC-ROC (mean ± std, {n_seeds} seeds)")
 
     # Annotate recommended threshold
     rec_eps = DP_CFG["recommended_epsilon"]

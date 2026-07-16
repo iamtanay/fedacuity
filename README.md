@@ -3,7 +3,11 @@
 > **Privacy-Preserving Federated Learning with Explainability Auditing**
 > for Staffing-Acuity Mismatch Prediction in Long-Term Care
 
-*Tanay Kashyap · M.Tech AI/ML · Work Integrated Learning Programme*
+*Tanay Kashyap · Independent Researcher*
+
+📄 **Paper:** preprint under submission to arXiv — LaTeX source in [`paper/`](paper/), submission bundle at `paper/fedacuity_arxiv.zip`.
+
+![FedAcuity three-layer architecture](final%20architecture.png)
 
 ---
 
@@ -11,9 +15,7 @@
 
 **87% of nursing homes** report moderate-to-high staffing shortages — yet **zero cross-facility predictive tools** exist for staffing-acuity mismatch in Long-Term Care (LTC).
 
-HIPAA prohibits sharing resident records, making centralised ML **illegal**.
-
-FedAcuity solves this: facilities collaborate by sharing **model weights only**, never patient data.
+HIPAA prohibits sharing resident records, making centralised ML infeasible. FedAcuity lets facilities collaborate by sharing **model parameters only** — raw resident data never leaves a facility.
 
 ---
 
@@ -21,85 +23,67 @@ FedAcuity solves this: facilities collaborate by sharing **model weights only**,
 
 | # | Contribution | What It Does |
 |---|---|---|
-| **C1** | 🌐 FedAcuity FL System | Domain-driven clustered federation for LTC non-IID data + Differential Privacy |
-| **C2** | 🧪 Synthetic Data Validation | CTGAN generation + MIMIC-IV fidelity proof (KS-test, Frobenius norm, TSTR) |
-| **C3** | 🔍 XAI Audit Scorecard | 4-dimension audit: Fidelity · Stability · Fairness · Plausibility |
+| **C1** | 🌐 Domain-Driven Clustered FL | Care-type clustering (MC / SNF / IL) for extreme non-IID data, with a differential-privacy feasibility analysis (Opacus DP-SGD) |
+| **C2** | 🧪 Synthetic LTC Benchmark | CTGAN-generated 10-facility dataset, honestly anchored to real MIMIC-IV (205k admissions) via within-cohort calibration |
+| **C3** | 🔍 XAI Audit Scorecard | Four SHAP dimensions — D1 Fidelity · D2 Stability · D3 Fairness · D4 Plausibility — computed on the model each strategy deploys |
+
+---
+
+## Headline Results
+
+Held-out facilities 6 (SNF) + 9 (IL), 50 rounds, SEED=42 throughout:
+
+| Strategy | AUC-ROC | Note |
+|---|---|---|
+| **Clustered FL (ours)** | **0.9827** | matches the oracle |
+| Centralised Oracle | 0.9824 | HIPAA-violating upper bound |
+| FedAvg / FedProx | 0.9685 | single global model |
+
+- **CFL − FedAvg:** ΔAUC +0.0142 — paired instance-level bootstrap 95% CI [−0.001, +0.035], CFL higher in **96.2%** of 2,000 resamples.
+- **The decisive result is fairness (D3):** the single global model FedAvg deploys misses **78% of Memory-Care understaffing days** (TPR 0.22 vs CFL 0.92); equalized-odds gap 0.39 → **0.18** under CFL.
+- **Differential privacy:** ε = 10 recommended — 14.9% AUC degradation (mean over 5 paired seeds, monotonic in ε).
+
+> ⚖️ **Honest framing:** this is a *controlled benchmark* — the mismatch label is a known deterministic function of the features, so absolute AUCs are structurally high for every method. All claims are **comparative** between aggregation strategies; see the paper's Limitations section.
 
 ---
 
 ## Quickstart
 
-### Prerequisites
-
-Requires **Python 3.11** — check with:
-```bash
-python --version
-```
-
-### 1. Create & Activate Virtual Environment
+Requires **Python 3.12**.
 
 ```bash
-python3.11 -m venv .venv
-
-# macOS / Linux
-source .venv/bin/activate
+python -m venv venv
 
 # Windows (PowerShell)
-.venv\Scripts\Activate.ps1
-```
+venv\Scripts\Activate.ps1
+# macOS / Linux
+source venv/bin/activate
 
-### 2. Install Dependencies
-
-```bash
-pip install --upgrade pip
 pip install -r requirements.txt
-```
-
-### 3. Verify Installation
-
-```bash
 python -c "import flwr, sdv, xgboost, shap, opacus; print('All dependencies OK')"
 ```
 
-✅ If you see `All dependencies OK`, you're ready to go.
-
 ---
 
-## Running the Pipeline
+## Reproducing Every Number in the Paper
 
-### Phase 2 — Synthetic Data Generation & Validation
+Run in this order (each step feeds the next):
+
 ```bash
-python -m src.data.generator     # CTGAN generation (M1.2)
-python -m src.data.fidelity       # KS-test, Frobenius norm, TSTR (M1.4)
+python -m src.data.generator              # 1. CTGAN synthetic data (~30 min CPU)
+python -m src.data.fidelity               # 2. Fidelity vs MIMIC-IV → Fig 2
+python -m src.fl.simulation --strategy all --rounds 50   # 3. All 5 FL strategies
+python -m src.evaluation.eval_held_out    # 4. Held-out Table II metrics
+python -m src.evaluation.figures          # 5. Figs 3–4
+python -m src.evaluation.bootstrap_ci     # 6. Paired bootstrap CIs (canonical uncertainty)
+python -m src.dp.epsilon_sweep            # 7. DP sweep (5 paired seeds) → Fig 5
+python -m src.xai.run_xai_audit           # 8. SHAP + D1–D4 + scorecard → Fig 6
+python -m src.evaluation.architecture_figure   # 9. Fig 1
+
+pytest tests/ -v                          # 73 tests
 ```
 
-### Phase 3 — Federated Learning Simulation
-```bash
-# Run individual strategies
-python -m src.fl.simulation --strategy local
-python -m src.fl.simulation --strategy centralised
-python -m src.fl.simulation --strategy fedavg
-python -m src.fl.simulation --strategy fedprox --mu 0.1
-python -m src.fl.simulation --strategy clustered
-
-# Or run all strategies in one shot
-python -m src.fl.simulation --all
-```
-
-### Phase 3 — Differential Privacy Sweep
-```bash
-python -m src.dp.epsilon_sweep    # ε ∈ {1, 2, 5, 10, ∞}
-```
-
-### Phase 4 — XAI Audit Scorecard
-```bash
-python -m src.xai.scorecard       # 4-dimension audit + radar chart
-```
-
-### Launch Jupyter
-```bash
-jupyter notebook
-```
+Individual FL strategies: `--strategy {local|centralised|fedavg|fedprox|clustered}`.
 
 ---
 
@@ -107,114 +91,49 @@ jupyter notebook
 
 ```
 fedacuity/
-├── 📁 data/
-│   ├── raw/                  # Schema definitions, seed data
-│   ├── synthetic/            # CTGAN-generated facility datasets (CSV + parquet)
-│   ├── mimic_iv/             # MIMIC-IV elderly subset (credentialed access required)
-│   └── processed/            # Train/val/test splits per facility
-│
-├── 📓 notebooks/
-│   ├── 01_literature_map.ipynb
-│   ├── 02_schema_design.ipynb
-│   ├── 03_ctgan_generation.ipynb
-│   ├── 04_fidelity_validation.ipynb
-│   ├── 05_fl_fedavg_baseline.ipynb
-│   ├── 06_fl_comparison.ipynb
-│   ├── 07_dp_sweep.ipynb
-│   ├── 08_shap_pipeline.ipynb
-│   ├── 09_xai_audit.ipynb
-│   └── 10_results_figures.ipynb
-│
-├── 🐍 src/
-│   ├── config.py             # Config loader (reads config.yaml)
+├── config.yaml                    # Single source of truth: hyperparams, paths, SEED=42
+├── src/
 │   ├── data/
-│   │   ├── schema.py         # Data schema, care-type specs, label definition (M1.1)
-│   │   ├── generator.py      # CTGAN generation pipeline (M1.2)
-│   │   ├── fidelity.py       # KS-test, Frobenius norm, TSTR (M1.4)
-│   │   └── loaders.py        # Per-facility data loaders with train/val/test splits
+│   │   ├── schema.py              # Feature specs, non-IID distributions, label definition
+│   │   ├── generator.py           # CTGAN pipeline → 10 facility CSVs
+│   │   ├── fidelity.py            # KS / Frobenius / TSTR vs MIMIC-IV
+│   │   ├── mimic_preprocessor.py  # MIMIC-IV elderly-subset extraction
+│   │   ├── mimic_analysis.py      # Within-MIMIC-IV cohort calibration
+│   │   └── loaders.py             # Per-facility stratified 60/20/20 splits
 │   ├── fl/
-│   │   ├── client.py         # Flower FlowerClient — XGBoost local training (M2.1/2.2)
-│   │   └── simulation.py     # End-to-end simulation runner — all 5 strategies, incl.
-│   │                         #   domain-driven Clustered FL by care type (M2.5/2.6 — C1 core)
+│   │   ├── client.py              # FedAcuityClient — XGBoost local training
+│   │   └── simulation.py          # All 5 strategies; prediction-consensus aggregation
 │   ├── dp/
-│   │   └── epsilon_sweep.py  # Opacus DP + ε sweep (M3)
+│   │   └── epsilon_sweep.py       # Opacus DP-SGD, ε ∈ {1,2,5,10,∞}, 5 paired seeds
 │   ├── xai/
-│   │   └── scorecard.py      # 4-dimension XAI Audit Scorecard + radar chart (M4.6)
+│   │   ├── shap_pipeline.py       # SHAP over each strategy's deployed model
+│   │   ├── d1_fidelity.py … d4_plausibility.py   # The four audit dimensions
+│   │   ├── run_xai_audit.py       # Orchestrator → xai_audit_raw.json + Fig 6
+│   │   └── scorecard.py           # Normalised scorecard + radar chart
 │   └── evaluation/
-│       └── logger.py         # Centralised results logger — pandas + JSON (M5.1)
-│
-├── 📊 results/
-│   ├── figures/              # All paper figures (PNG + PDF)
-│   ├── tables/               # CSV + LaTeX tables
-│   └── logs/                 # Per-run metric logs (JSON)
-│
-├── 📄 docs/
-│   └── architecture.md       # System architecture document
-│
-├── 🧪 tests/                 # Unit tests
-│
-├── .venv/                    # Virtual environment (gitignored)
-├── .gitignore
-├── requirements.txt
-├── config.yaml               # Central config: hyperparams, paths, seeds
-├── CONTEXT.md                # Project state for AI-assisted development
-└── README.md
+│       ├── eval_held_out.py       # Table II held-out metrics
+│       ├── bootstrap_ci.py        # Paired instance-level bootstrap CIs
+│       ├── metrics.py · figures.py · architecture_figure.py · logger.py
+├── paper/                         # IEEEtran LaTeX source + figures + arXiv bundle
+├── data/synthetic/                # Generated facility CSVs (regenerable)
+├── results/                       # Figures, tables, logs (regenerable)
+├── notebooks/                     # 01 literature map · 02 EDA/schema · 03 MIMIC exploration
+└── tests/                         # 73 unit tests
 ```
-
----
-
-## 16-Week Execution Plan
-
-| Phase | Weeks | Focus | Deliverable |
-|---|---|---|---|
-| 🏗️ Foundation | 1–3 | Literature, MIMIC-IV, Architecture | Architecture doc + lit map |
-| 🔧 Data Engineering | 4–5 | CTGAN generation + fidelity | Validated LTC benchmark (**C2 ✓**) |
-| 🌐 FL Implementation | 6–9 | All 5 model variants + DP sweep | FL codebase + results (**C1 ✓**) |
-| 🔍 XAI Audit | 10–12 | 4-dimension SHAP audit | XAI Audit Scorecard (**C3 ✓**) |
-| ✍️ Write-up | 13–16 | Dissertation + paper | IEEE JBHI submission |
 
 ---
 
 ## Tech Stack
 
-| Category | Tool | Purpose |
-|---|---|---|
-| 🌐 FL Framework | `flwr` (Flower) | Federated simulation |
-| 🧪 Data Generation | `sdv` / `ctgan` | Synthetic LTC dataset |
-| 🤖 ML (Primary) | `xgboost` | Tabular prediction |
-| 🔦 ML (Secondary) | `torch` | Federated NN for Opacus DP |
-| 🔒 Privacy | `opacus` | Differential privacy (DP-SGD) |
-| 💡 XAI | `shap` | Explanation fidelity + stability |
-| 📐 Fidelity Tests | `scipy.stats` | KS-test vs MIMIC-IV |
-| 📏 Evaluation | `scikit-learn` | AUC-ROC, F1, fairness |
-| 🐍 Environment | `venv` / Python 3.11 | Reproducibility |
+`flwr` (Flower FL) · `sdv`/CTGAN · `xgboost` · `torch` + `opacus` (DP-SGD) · `shap` · `scikit-learn` · `scipy` · Python 3.12
 
 ---
 
 ## Data Access
 
-MIMIC-IV access requires **PhysioNet credentialed access**.
-Apply at: [https://physionet.org/content/mimiciv/](https://physionet.org/content/mimiciv/)
+MIMIC-IV requires **PhysioNet credentialed access** ([physionet.org/content/mimiciv](https://physionet.org/content/mimiciv/)). It is used **only as an external fidelity anchor** — no MIMIC-IV records train any model. If absent, `fidelity.py` falls back to a synthetic holdout.
 
-Place the elderly subset (age ≥ 65, ≥ 3 comorbidities) at:
-```
-data/mimic_iv/mimic_elderly_subset.parquet
-```
-
-> 💡 If access is pending, `fidelity.py` automatically falls back to a synthetic holdout for pipeline testing.
-
-⚠️ **No real PHI is used anywhere in this project.**
-
----
-
-## Target Venues
-
-| Priority | Venue |
-|---|---|
-| 🥇 Primary | IEEE Journal of Biomedical and Health Informatics (JBHI) |
-| 🥈 Secondary | JAMIA |
-| 🎯 Conference | MLHC 2026 |
-| 🎯 Conference | ACM FAccT |
+⚠️ **No real PHI is used anywhere in this project.** All facility data is synthetic.
 
 ---
 

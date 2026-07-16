@@ -52,18 +52,23 @@ prediction of staffing-acuity mismatch without any facility ever sharing patient
 data. FedAcuity makes three standalone contributions: (C1) a domain-driven
 Clustered Federated Learning system that groups facilities by care type
 (Memory Care, Skilled Nursing, Independent Living) to handle the non-IID
-distribution of LTC data, augmented with Opacus differential privacy; (C2) a
+distribution of LTC data, with an accompanying differential-privacy
+feasibility analysis (Opacus DP-SGD); (C2) a
 CTGAN-based synthetic LTC benchmark dataset validated against MIMIC-IV using
 KS-tests, Frobenius norm, and Train-on-Synthetic/Test-on-Real (TSTR)
 experiments; and (C3) a four-dimension XAI Audit Scorecard measuring
 explanation fidelity, stability, fairness, and clinical plausibility via SHAP
-across five federated model variants. Experiments across 10 simulated LTC facilities demonstrate that Clustered FL
-achieves AUC-ROC of 0.9827 on held-out facilities (SNF: 0.9917, IL: 0.9693) ---
-closely approaching the Centralised Oracle (0.9824) while outperforming global
-FedAvg (0.9685) by 1.42 AUC points overall (+2.65pt on IL, +0.36pt on SNF)
-(Mann-Whitney $p < 0.001$). Critically, the IL advantage (+2.65pt) is
-substantially larger than the SNF advantage (+0.36pt), confirming that
-domain-driven clustering is most impactful for the highest non-IID cluster.
+across five federated model variants. Experiments on a controlled synthetic
+benchmark of 10 LTC facilities --- in which the ground-truth mismatch-generating
+function is known, isolating the effect of the aggregation strategy ---
+demonstrate that Clustered FL
+achieves AUC-ROC of 0.9827 on held-out facilities (SNF: 0.9917, IL: 0.9693),
+matching the Centralised Oracle (0.9824) while exceeding global
+FedAvg (0.9685) by 1.42 AUC points overall (+2.65pt on IL, +0.36pt on SNF;
+paired instance-level bootstrap $\Delta$AUC 95\% CI $[-0.001, +0.035]$, CFL
+higher in 96.2\% of resamples). The IL advantage is
+substantially larger than the SNF advantage, consistent with
+domain-driven clustering being most impactful for the most non-IID cluster.
 C2 validates synthetic data fidelity via MIMIC-IV cohort calibration:
 the real-world post-acute discharge rate (27.2\%) aligns within 0.8\% of
 the synthetic SNF mismatch target (28\%). Differential privacy (mean over five seeds) at
@@ -229,6 +234,20 @@ where $C_t$ is the daily resident census, $H_t^{*}$ are available nursing
 hours, and $\tau_{\text{care\_type}}$ is a care-type-specific threshold
 calibrated to achieve a target mismatch rate of approximately 30\%.
 
+An important design consequence, which we state explicitly: because the label
+is a known deterministic function of quantities that also appear among the
+input features, this is a \emph{controlled benchmark} in which the target
+concept is recoverable in principle by any sufficiently expressive model.
+Absolute AUC values are therefore structurally high across all methods and
+should not be read as clinical prediction performance. This is deliberate ---
+holding the learnable concept fixed and known is precisely what lets the
+benchmark isolate the variable under study, namely how the \emph{aggregation
+strategy} (local, centralised, global FL, clustered FL) preserves or degrades
+that concept across non-IID clients and unseen facilities. All claims in this
+paper are comparative claims between strategies on this benchmark; genuinely
+predictive (temporal) formulations are future work
+(Sec.~\ref{sec:discussion}).
+
 \subsection{CTGAN Generation}
 We train one CTGAN~\cite{ctgan2019} model per facility (epochs=500, batch size=500, generator
 and discriminator dims [256, 256]) to generate $\sim$1{,}095 daily records
@@ -291,7 +310,7 @@ mirrors synthetic SNF mismatch target (28\%), within 0.8\%.}
 \subsection{System Overview}
 \begin{figure*}[!t]
 \centering
-\includegraphics[width=0.92\textwidth]{figures/fig1_architecture.pdf}
+\includegraphics[width=0.9\textwidth]{figures/fig1_architecture_final.png}
 \caption{FedAcuity three-layer system architecture. \textbf{Layer 1 (Facility
 Edge):} ten facilities grouped into care-type clusters (MC, SNF, IL) each train
 XGBoost locally; facilities 6 (SNF) and 9 (IL) are held out; only serialised
@@ -470,8 +489,11 @@ fall/pain risk) and the staffing-supply/scale determinants (nurse
 hours-per-resident-day and census) established by the CMS Payroll-Based Journal
 framework~\cite{harrington2020,dellefield2015staffing}. All five variants score
 1.00: every model's most influential features are clinically recognised, with no
-spurious signal. D4 thus functions as a sanity check that all models pass; the
-CFL advantage is concentrated in D3.
+spurious signal. We note that this outcome is partially structural on our
+benchmark --- the staffing determinants are also components of the label
+definition (Sec.~\ref{sec:data}) --- so D4 functions as a no-spurious-features
+sanity check that all models pass, not as a discriminating axis; the CFL
+advantage is concentrated in D3.
 
 \begin{table}[!t]
 \caption{XAI Audit Scorecard (real SHAP; all scores normalised to $[0,1]$, higher better)}
@@ -515,8 +537,24 @@ Training uses SEED = 42 throughout for full reproducibility. FL simulation:
 50 rounds, all 8 training facilities (IDs 0--5, 7--8) participate each round.
 Held-out facilities 6 (Skilled Nursing) and 9 (Independent Living) serve as the
 final evaluation set, unseen during any FL round. Primary metric: AUC-ROC.
-Secondary metrics: F1-score, precision, recall. Statistical significance
-assessed via Mann-Whitney U test (non-parametric, two-sided).
+Secondary metrics: F1-score, precision, recall.
+
+\textit{Uncertainty quantification.} Because every client retrains with a fixed
+tree budget under a fixed seed, the entire pipeline is deterministic: per-round
+AUC is constant after the first round, so significance testing \emph{across
+communication rounds} would constitute pseudo-replication. We therefore report
+the exact deterministic point estimates together with \emph{paired
+instance-level bootstrap} confidence intervals: 2{,}000 resamples of the pooled
+held-out test set ($n=438$ instances, 87 positive), with the same resampled
+indices applied to every strategy so that the AUC-difference distribution
+accounts for error correlation between models.
+
+\textit{Reproducibility.} All hyperparameters are read from a single
+\texttt{config.yaml}; every source of randomness is seeded (SEED $=42$); the
+full pipeline (data generation $\rightarrow$ fidelity $\rightarrow$ FL
+simulation $\rightarrow$ DP sweep $\rightarrow$ XAI audit) regenerates every
+number, table, and figure in this paper.\footnote{Code and the synthetic
+benchmark: \url{https://github.com/iamtanay/fedacuity}}
 
 \subsection{FL Strategy Comparison}
 
@@ -541,7 +579,8 @@ FedProx ($\mu=0.1$)$^\dagger$         & 0.9685 & 0.8539 & 0.8352 & 0.8736 \\
 \bottomrule
 \multicolumn{5}{l}{\small Held-out: facility 6 (SNF) + facility 9 (IL). 50 communication rounds.} \\
 \multicolumn{5}{l}{\small $\dagger$ Equivalent to Cross-Facility Ensemble with fixed-budget XGBoost (see text).} \\
-\multicolumn{5}{l}{\small Mann-Whitney U=400, $p < 0.001$ (CFL vs FedAvg per-round AUC).}
+\multicolumn{5}{l}{\small CFL$-$FedAvg $\Delta$AUC $=+0.0142$, paired bootstrap 95\% CI $[-0.001, +0.035]$;} \\
+\multicolumn{5}{l}{\small CFL higher in 96.2\% of 2{,}000 paired resamples (see Sec.~\ref{sec:experiments}).}
 \end{tabular}
 \end{table}
 
@@ -559,9 +598,11 @@ Clustered FL (0.9827) outperforms FedAvg (0.9685) by 1.42 AUC points overall
 \begin{figure}[!t]
 \centering
 \includegraphics[width=\columnwidth]{figures/fig3_convergence.pdf}
-\caption{FL convergence curves (AUC-ROC vs.\ communication rounds) on training
-clients. CFL stabilises above FedAvg across 50 rounds
-(per-round gap confirmed by Mann-Whitney U=400, $p < 0.001$).}
+\caption{AUC-ROC across communication rounds on training clients. Because each
+client retrains with a fixed tree budget every round, prediction-consensus FL
+converges in a single round and AUC is constant thereafter; the persistent
+CFL--FedAvg offset is the care-type clustering effect, not an accumulation over
+rounds.}
 \label{fig:convergence}
 \end{figure}
 
@@ -586,9 +627,20 @@ converge to the same result as a single round of ensemble averaging. This makes
 the CFL vs.\ FedAvg comparison a direct test of care-type-specific routing vs.\
 global averaging.
 
-Mann-Whitney U on per-round AUC distributions confirms statistical significance
-(U=400, $p < 0.001$). CFL closely approaches the Centralised Oracle (0.9824)
-while maintaining full HIPAA compliance.
+Under the paired instance-level bootstrap, the pooled AUC difference is
+$\Delta = +0.0142$ with 95\% CI $[-0.001, +0.035]$: CFL is higher in 96.2\% of
+resamples, though the interval marginally includes zero at the pooled level
+($\Delta = +0.027$ $[-0.002, +0.064]$ on IL; $+0.004$ $[-0.004, +0.015]$ on
+SNF). We state this plainly rather than overclaim: on this deterministic
+benchmark the AUC gap is exact and consistently favours CFL, but with two
+held-out facilities ($n=438$ test instances, 87 positive) the pooled-AUC
+evidence alone is suggestive, not conclusive. The substantive case for CFL is
+therefore carried jointly by (i) oracle parity --- CFL (0.9827) matches the
+HIPAA-violating Centralised Oracle (0.9824), whose own CI overlaps CFL's
+almost entirely --- and (ii) the categorical subgroup-reliability differences
+exposed by the XAI fairness audit (Sec.~\ref{sec:xai}), where FedAvg's Memory
+Care true-positive rate collapses to 0.22 against CFL's 0.92 --- a difference
+no confidence interval renders ambiguous.
 
 \subsection{Differential Privacy Results}
 Figure~\ref{fig:dp} and Table~\ref{tab:dp_sweep} report the privacy-utility
@@ -660,6 +712,15 @@ motivates exploring tree-level XGBoost DP perturbation as future work.
 
 \subsection{Limitations}
 \begin{itemize}
+  \item \textbf{Known label-generating function:} The mismatch label is a
+  deterministic threshold function of features that are also model inputs
+  (Sec.~\ref{sec:data}). Absolute AUCs are therefore structurally high for every
+  method and carry no clinical-performance claim; the benchmark's purpose is the
+  controlled comparison between aggregation strategies. This also partially
+  inflates D4 plausibility, since the staffing determinants that drive SHAP are
+  label components by construction. A temporal formulation --- predicting day
+  $t{+}1$ mismatch from day $t$ features --- would break this circularity and is
+  the highest-priority extension.
   \item \textbf{MIMIC-IV fidelity gap:} Direct feature-level comparison between
   synthetic LTC data and MIMIC-IV hospital data shows expected domain heterogeneity
   (Frobenius 0.823 vs.\ baseline 0.746; TSTR gap 0.333), reflecting fundamental
@@ -687,6 +748,9 @@ motivates exploring tree-level XGBoost DP perturbation as future work.
 
 \subsection{Future Work}
 \begin{itemize}
+  \item Temporal prediction --- forecasting day-$(t{+}1)$ mismatch from day-$t$
+  features --- to replace the known-function benchmark with a genuinely
+  predictive task
   \item Extension to asynchronous FL for facilities with variable connectivity
   \item Integration with CMS Payroll-Based Journal (PBJ) staffing data
   \item Tree-level DP perturbation for XGBoost to eliminate the secondary NN requirement
@@ -706,9 +770,10 @@ MIMIC-IV (C2), and a four-dimension XAI Audit Scorecard (C3) — FedAcuity
 demonstrates that cross-facility collaborative prediction is feasible under
 HIPAA constraints. On held-out facilities 6 (Skilled Nursing) and 9 (Independent
 Living), Clustered FL achieves AUC-ROC of 0.9827 (F1 0.841), matching the
-Centralised Oracle (0.9824) while outperforming global FedAvg (0.9685) by 1.42
-AUC points overall --- +2.65 on IL and +0.36 on SNF (Mann-Whitney U$=$400,
-$p<0.001$). The XAI Audit Scorecard, computed from real SHAP values, shows that
+Centralised Oracle (0.9824) while exceeding global FedAvg (0.9685) by 1.42
+AUC points overall --- +2.65 on IL and +0.36 on SNF (paired bootstrap
+$\Delta$AUC 95\% CI $[-0.001, +0.035]$, CFL higher in 96.2\% of
+resamples). The XAI Audit Scorecard, computed from real SHAP values, shows that
 this advantage is a fairness mechanism: the single global model FedAvg deploys
 under-detects Memory Care mismatch (true-positive rate 0.22, equalized-odds gap
 0.39), whereas Clustered FL keeps subgroup detection balanced (gap 0.18), matching

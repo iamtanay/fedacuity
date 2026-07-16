@@ -298,7 +298,7 @@ D4 literature features: `adl_mobility`, `adl_cognition`, `medication_count`, `fa
 **Canonical FL numbers (held-out facilities 6 (SNF) + 9 (IL), 50 rounds):**
 - CFL: AUC 0.9827, F1 0.8408 | SNF: 0.9917 | IL: 0.9693
 - FedAvg: AUC 0.9685, F1 0.8539 | SNF: 0.9881 | IL: 0.9428
-- CFL vs FedAvg: +1.42pt overall (+0.36pt SNF, +2.65pt IL) | Mann-Whitney U=400, p<0.001
+- CFL vs FedAvg: +1.42pt overall (+0.36pt SNF, +2.65pt IL) | paired instance-level bootstrap (2000 resamples, n=438): ΔAUC 95% CI [−0.001, +0.035], CFL higher in 96.2% of resamples. NOTE: the old "Mann-Whitney U=400, p<0.001 across rounds" is VACUOUS (pipeline deterministic per round — pseudo-replication); never reuse it. bootstrap_ci.py is canonical.
 - Centralised oracle: AUC 0.9824, F1 0.8555 | IL Local (fac 7): 0.9643 | SNF Local (fac 3): 0.9823
 - Fidelity C2: MIMIC-IV cohort calibration — 27.2% post-acute discharge ≈ 28% SNF mismatch target (within 0.8%)
 - DP: ε=10 recommended — no-DP 0.9812 → 0.8347 (14.9% drop, mean over 5 seeds, monotonic)

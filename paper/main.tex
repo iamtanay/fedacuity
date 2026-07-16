@@ -289,16 +289,19 @@ mirrors synthetic SNF mismatch target (28\%), within 0.8\%.}
 \label{sec:system}
 
 \subsection{System Overview}
-% Figure I placeholder
-\begin{figure}[!t]
+\begin{figure*}[!t]
 \centering
-% \includegraphics[width=\columnwidth]{figures/fig1_architecture.pdf}
-\fbox{\rule{0pt}{4cm}\rule{\columnwidth}{0pt}} % Placeholder
-\caption{FedAcuity system architecture. Facilities are partitioned into
-care-type clusters. Each cluster performs independent federated aggregation.
-No patient data leaves the facility boundary.}
+\includegraphics[width=0.92\textwidth]{figures/fig1_architecture.pdf}
+\caption{FedAcuity three-layer system architecture. \textbf{Layer 1 (Facility
+Edge):} ten facilities grouped into care-type clusters (MC, SNF, IL) each train
+XGBoost locally; facilities 6 (SNF) and 9 (IL) are held out; only serialised
+model bytes cross the HIPAA boundary. \textbf{Layer 2 (Aggregation Server):}
+intra-cluster FedAvg yields three independent care-type global models (Clustered
+FL), with FedAvg/FedProx/Centralised/Local baselines. \textbf{Layer 3 (Evaluation
+\& XAI):} held-out evaluation, differential-privacy sweep, and the SHAP-based XAI
+Audit Scorecard (D1--D4). No raw resident data ever leaves a facility.}
 \label{fig:architecture}
-\end{figure}
+\end{figure*}
 
 FedAcuity uses Flower (flwr)~\cite{beutel2020flower} as the federation
 framework. Ten facilities are partitioned into three care-type clusters:
